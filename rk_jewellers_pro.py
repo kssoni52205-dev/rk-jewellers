@@ -15,8 +15,8 @@ BACKUP_DIR.mkdir(exist_ok=True)
 app = Flask(__name__)
 app.secret_key = os.environ.get("RK_SECRET_KEY") or os.urandom(32)
 
-ADMIN_USER = os.environ.get("RK_ADMIN_USER", "admin")
-ADMIN_PASSWORD = os.environ.get("RK_ADMIN_PASSWORD", "1234")
+ADMIN_USER = os.environ.get("RK_ADMIN_USER", "dheeraj")
+ADMIN_PASSWORD = os.environ.get("RK_ADMIN_PASSWORD", "4141")
 ADMIN_PASSWORD_HASH = generate_password_hash(ADMIN_PASSWORD)
 
 
