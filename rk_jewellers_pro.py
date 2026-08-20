@@ -7,6 +7,19 @@ import os
 import shutil
 import html
 
+# PDF FEATURE
+from io import BytesIO
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle
+)
+
 APP_DIR = Path(__file__).resolve().parent
 DB = APP_DIR / "rk_jewellers.db"
 BACKUP_DIR = APP_DIR / "backups"
@@ -15,19 +28,28 @@ BACKUP_DIR.mkdir(exist_ok=True)
 app = Flask(__name__)
 app.secret_key = os.environ.get("RK_SECRET_KEY") or os.urandom(32)
 
+# LOGIN DETAILS
+# Website par ye details kahin display nahi hongi.
 ADMIN_USER = os.environ.get("RK_ADMIN_USER", "dheeraj")
 ADMIN_PASSWORD = os.environ.get("RK_ADMIN_PASSWORD", "4141")
 ADMIN_PASSWORD_HASH = generate_password_hash(ADMIN_PASSWORD)
 
 
 def db():
+
     con = sqlite3.connect(DB)
+
     con.row_factory = sqlite3.Row
-    con.execute("PRAGMA foreign_keys = ON")
+
+    con.execute(
+        "PRAGMA foreign_keys = ON"
+    )
+
     return con
 
 
 def setup():
+
     con = db()
 
     con.executescript("""
@@ -71,13 +93,21 @@ def setup():
         FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE
     );
 
-    CREATE INDEX IF NOT EXISTS idx_jobs_customer ON jobs(customer_id);
-    CREATE INDEX IF NOT EXISTS idx_jobs_date ON jobs(date);
-    CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id);
-    CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(date);
+    CREATE INDEX IF NOT EXISTS idx_jobs_customer
+    ON jobs(customer_id);
+
+    CREATE INDEX IF NOT EXISTS idx_jobs_date
+    ON jobs(date);
+
+    CREATE INDEX IF NOT EXISTS idx_payments_customer
+    ON payments(customer_id);
+
+    CREATE INDEX IF NOT EXISTS idx_payments_date
+    ON payments(date);
     """)
 
-    # Old database upgrade - SQLite-safe defaults
+    # OLD DATABASE UPGRADE
+
     existing = {
         r[1]
         for r in con.execute(
@@ -92,9 +122,14 @@ def setup():
     }
 
     for col, definition in customer_cols.items():
+
         if col not in existing:
+
             con.execute(
-                f"ALTER TABLE customers ADD COLUMN {col} {definition}"
+                f"""
+                ALTER TABLE customers
+                ADD COLUMN {col} {definition}
+                """
             )
 
     existing = {
@@ -114,9 +149,14 @@ def setup():
     }
 
     for col, definition in job_cols.items():
+
         if col not in existing:
+
             con.execute(
-                f"ALTER TABLE jobs ADD COLUMN {col} {definition}"
+                f"""
+                ALTER TABLE jobs
+                ADD COLUMN {col} {definition}
+                """
             )
 
     existing = {
@@ -127,6 +167,7 @@ def setup():
     }
 
     if "mode" not in existing:
+
         con.execute(
             """
             ALTER TABLE payments
@@ -135,6 +176,7 @@ def setup():
         )
 
     if "created_at" not in existing:
+
         con.execute(
             """
             ALTER TABLE payments
@@ -147,38 +189,56 @@ def setup():
 
 
 def money(value):
-    return "₹ {:,.2f}".format(float(value or 0))
+
+    return "₹ {:,.2f}".format(
+        float(value or 0)
+    )
 
 
 def esc(value):
+
     return html.escape(
         "" if value is None else str(value)
     )
 
 
 def parse_float(name, default=0.0):
-    raw = request.form.get(name, "").strip()
+
+    raw = request.form.get(
+        name,
+        ""
+    ).strip()
 
     if not raw:
         return default
 
     try:
+
         return float(raw)
+
     except ValueError:
+
         raise ValueError(
             f"{name} me valid number dalo."
         )
 
 
 def parse_int(name, default=1):
-    raw = request.form.get(name, "").strip()
+
+    raw = request.form.get(
+        name,
+        ""
+    ).strip()
 
     if not raw:
         return default
 
     try:
+
         return int(raw)
+
     except ValueError:
+
         raise ValueError(
             f"{name} me valid number dalo."
         )
@@ -598,6 +658,7 @@ td{
         max-width:none;
         padding:0;
     }
+
 }
 
 </style>
@@ -848,14 +909,6 @@ def login():
 
     </form>
 
-    <p class="muted">
-
-        Default local login:
-        <b>admin</b> /
-        <b>1234</b>
-
-    </p>
-
     </div>
 
     </div>
@@ -1092,6 +1145,8 @@ def home():
         "Dashboard",
         body
     )
+
+
 @app.route("/customers", methods=["GET"])
 @login_required
 def customers():
@@ -1472,6 +1527,7 @@ def add_customer():
         """,
         (
             name,
+
             request.form.get(
                 "mobile",
                 ""
@@ -1735,9 +1791,7 @@ def toggle_customer(cid):
     return redirect(
         url_for("customers")
     )
-
-
-@app.route(
+    @app.route(
     "/jobs",
     methods=["GET", "POST"]
 )
@@ -1780,7 +1834,7 @@ def jobs():
             customer_id = request.form.get(
                 "customer_id",
                 ""
-            )
+            ).strip()
 
             date_value = (
                 request.form.get(
@@ -2468,9 +2522,7 @@ def jobs():
 
                     <a
                         class="btn small"
-                        href="{url_for(
-                            'jobs'
-                        )}?edit={r['id']}"
+                        href="{url_for('jobs')}?edit={r['id']}"
                     >
                         EDIT
                     </a>
@@ -2495,6 +2547,8 @@ def jobs():
         "Jobs",
         body
     )
+
+
 @app.route(
     "/payments",
     methods=["GET", "POST"]
@@ -2538,7 +2592,7 @@ def payments():
             customer_id = request.form.get(
                 "customer_id",
                 ""
-            )
+            ).strip()
 
             date_value = (
                 request.form.get(
@@ -2918,9 +2972,7 @@ def payments():
 
                     <a
                         class="btn small"
-                        href="{url_for(
-                            'payments'
-                        )}?edit={r['id']}"
+                        href="{url_for('payments')}?edit={r['id']}"
                     >
                         EDIT
                     </a>
@@ -3040,7 +3092,7 @@ def ledger():
 
         if customer:
 
-            jobs = con.execute(
+            jobs_list = con.execute(
                 """
                 SELECT *
                 FROM jobs
@@ -3062,7 +3114,7 @@ def ledger():
 
             events = []
 
-            for j in jobs:
+            for j in jobs_list:
 
                 events.append(
                     {
@@ -3201,6 +3253,16 @@ def ledger():
                     </button>
 
                     <a
+                        class="btn blue"
+                        href="{url_for(
+                            'ledger_pdf',
+                            customer_id=cid
+                        )}"
+                    >
+                        📄 DOWNLOAD PDF
+                    </a>
+
+                    <a
                         class="btn green"
                         href="{url_for(
                             'ledger_whatsapp',
@@ -3307,7 +3369,7 @@ def ledger():
 
                 """
 
-            body += f"""
+            body += """
 
                 </table>
 
@@ -3323,7 +3385,7 @@ def ledger():
 
                 <textarea
                     readonly
-                >{esc(share_text)}</textarea>
+                >""" + esc(share_text) + """</textarea>
 
             </div>
 
@@ -3337,7 +3399,7 @@ def ledger():
     )
 
 
-@app.get("/ledger_whatsapp")
+@app.get("/ledger/whatsapp")
 @login_required
 def ledger_whatsapp():
 
@@ -3420,6 +3482,429 @@ def ledger_whatsapp():
     )
 
 
+@app.get("/ledger/pdf")
+@login_required
+def ledger_pdf():
+
+    try:
+
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import (
+            SimpleDocTemplate,
+            Paragraph,
+            Spacer,
+            Table,
+            TableStyle
+        )
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.enums import TA_CENTER
+        from reportlab.lib.units import mm
+
+    except ImportError:
+
+        flash(
+            "PDF ke liye reportlab install karo: pip install reportlab",
+            "error"
+        )
+
+        return redirect(
+            url_for("ledger")
+        )
+
+    cid = request.args.get(
+        "customer_id",
+        type=int
+    )
+
+    if not cid:
+
+        return redirect(
+            url_for("ledger")
+        )
+
+    con = db()
+
+    customer = con.execute(
+        """
+        SELECT *
+        FROM customers
+        WHERE id=?
+        """,
+        (cid,)
+    ).fetchone()
+
+    if not customer:
+
+        con.close()
+
+        flash(
+            "Customer nahi mila.",
+            "error"
+        )
+
+        return redirect(
+            url_for("ledger")
+        )
+
+    jobs_list = con.execute(
+        """
+        SELECT *
+        FROM jobs
+        WHERE customer_id=?
+        ORDER BY id
+        """,
+        (cid,)
+    ).fetchall()
+
+    payments_list = con.execute(
+        """
+        SELECT *
+        FROM payments
+        WHERE customer_id=?
+        ORDER BY id
+        """,
+        (cid,)
+    ).fetchall()
+
+    con.close()
+
+    events = []
+
+    for j in jobs_list:
+
+        events.append(
+            {
+                "date": j["date"],
+                "sort": j["id"],
+                "type": "KAAM",
+                "particular":
+                    (
+                        f"{j['jewellery']} - "
+                        f"{j['work']} "
+                        f"({j['status']})"
+                    ),
+                "debit":
+                    float(
+                        j["work_amount"] or 0
+                    ),
+                "credit": 0.0
+            }
+        )
+
+    for p in payments_list:
+
+        events.append(
+            {
+                "date": p["date"],
+                "sort": 1000000 + p["id"],
+                "type": "PAYMENT",
+                "particular":
+                    (
+                        f"{p['mode']} - "
+                        f"{p['note'] or 'Payment'}"
+                    ),
+                "debit": 0.0,
+                "credit":
+                    float(
+                        p["amount"] or 0
+                    )
+            }
+        )
+
+    events.sort(
+        key=lambda x: (
+            x["date"],
+            x["sort"]
+        )
+    )
+
+    total_debit = sum(
+        x["debit"]
+        for x in events
+    )
+
+    total_credit = sum(
+        x["credit"]
+        for x in events
+    )
+
+    balance = (
+        total_debit
+        - total_credit
+    )
+
+    filename = (
+        "ledger_"
+        + str(customer["name"])
+        .replace(" ", "_")
+        + ".pdf"
+    )
+
+    pdf_path = (
+        BACKUP_DIR
+        / filename
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_style = styles["Title"]
+    title_style.alignment = TA_CENTER
+
+    normal = styles["Normal"]
+
+    doc = SimpleDocTemplate(
+        str(pdf_path),
+        pagesize=A4,
+        rightMargin=12 * mm,
+        leftMargin=12 * mm,
+        topMargin=12 * mm,
+        bottomMargin=12 * mm
+    )
+
+    story = []
+
+    story.append(
+        Paragraph(
+            "R.K JEWELERS",
+            title_style
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Jewellery Job Work & Customer Ledger",
+            normal
+        )
+    )
+
+    story.append(
+        Spacer(
+            1,
+            8
+        )
+    )
+
+    story.append(
+        Paragraph(
+            f"<b>Customer:</b> "
+            f"{html.escape(str(customer['name']))}",
+            normal
+        )
+    )
+
+    story.append(
+        Paragraph(
+            f"<b>Mobile:</b> "
+            f"{html.escape(str(customer['mobile'] or '-'))}",
+            normal
+        )
+    )
+
+    story.append(
+        Spacer(
+            1,
+            10
+        )
+    )
+
+    table_data = [
+        [
+            "Date",
+            "Particular",
+            "Debit",
+            "Credit",
+            "Balance"
+        ]
+    ]
+
+    running = 0
+
+    for item in events:
+
+        running += (
+            item["debit"]
+            - item["credit"]
+        )
+
+        table_data.append(
+            [
+                str(item["date"]),
+                (
+                    str(item["type"])
+                    + "\n"
+                    + str(item["particular"])
+                ),
+                (
+                    f"₹ {item['debit']:,.2f}"
+                    if item["debit"] > 0
+                    else "-"
+                ),
+                (
+                    f"₹ {item['credit']:,.2f}"
+                    if item["credit"] > 0
+                    else "-"
+                ),
+                f"₹ {running:,.2f}"
+            ]
+        )
+
+    table = Table(
+        table_data,
+        repeatRows=1,
+        colWidths=[
+            25 * mm,
+            75 * mm,
+            25 * mm,
+            25 * mm,
+            30 * mm
+        ]
+    )
+
+    table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor("#4a2915")
+                ),
+                (
+                    "TEXTCOLOR",
+                    (0, 0),
+                    (-1, 0),
+                    colors.white
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.grey
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "TOP"
+                ),
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    8
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6
+                )
+            ]
+        )
+    )
+
+    story.append(table)
+
+    story.append(
+        Spacer(
+            1,
+            12
+        )
+    )
+
+    summary_data = [
+        [
+            "Total Kaam",
+            f"₹ {total_debit:,.2f}"
+        ],
+        [
+            "Total Payment",
+            f"₹ {total_credit:,.2f}"
+        ],
+        [
+            "Total Baaki",
+            f"₹ {balance:,.2f}"
+        ]
+    ]
+
+    summary_table = Table(
+        summary_data,
+        colWidths=[
+            70 * mm,
+            50 * mm
+        ]
+    )
+
+    summary_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.grey
+                ),
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, -1),
+                    "Helvetica-Bold"
+                ),
+                (
+                    "ALIGN",
+                    (1, 0),
+                    (1, -1),
+                    "RIGHT"
+                ),
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, -1),
+                    colors.whitesmoke
+                )
+            ]
+        )
+    )
+
+    story.append(
+        summary_table
+    )
+
+    story.append(
+        Spacer(
+            1,
+            20
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Developer: KRISHNA",
+            normal
+        )
+    )
+
+    doc.build(story)
+
+    return send_file(
+        pdf_path,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/pdf"
+    )
+    # ================================
+# PART 3 — REPORTS + PDF + BACKUP
+# ================================
+
 @app.route("/reports")
 @login_required
 def reports():
@@ -3443,22 +3928,18 @@ def reports():
 
     total_work = con.execute(
         """
-        SELECT
-            COALESCE(
-                SUM(work_amount),
-                0
-            ) c
+        SELECT COALESCE(
+            SUM(work_amount), 0
+        ) c
         FROM jobs
         """
     ).fetchone()["c"]
 
     total_payment = con.execute(
         """
-        SELECT
-            COALESCE(
-                SUM(amount),
-                0
-            ) c
+        SELECT COALESCE(
+            SUM(amount), 0
+        ) c
         FROM payments
         """
     ).fetchone()["c"]
@@ -3470,6 +3951,12 @@ def reports():
         WHERE status != 'Delivered'
         """
     ).fetchone()["c"]
+
+    delivered = jobs_count - pending
+
+    final_balance = (
+        total_work - total_payment
+    )
 
     top_customers = con.execute(
         """
@@ -3491,16 +3978,6 @@ def reports():
 
     con.close()
 
-    delivered = (
-        jobs_count
-        - pending
-    )
-
-    final_balance = (
-        total_work
-        - total_payment
-    )
-
     body = f"""
 
     <h2>
@@ -3510,54 +3987,27 @@ def reports():
     <div class="cardbox">
 
         <div class="card">
-
-            <h3>
-                ACTIVE CUSTOMERS
-            </h3>
-
-            <b>
-                {customers_count}
-            </b>
-
+            <h3>ACTIVE CUSTOMERS</h3>
+            <b>{customers_count}</b>
         </div>
 
         <div class="card">
-
-            <h3>
-                TOTAL JOBS
-            </h3>
-
-            <b>
-                {jobs_count}
-            </b>
-
+            <h3>TOTAL JOBS</h3>
+            <b>{jobs_count}</b>
         </div>
 
         <div class="card">
-
-            <h3>
-                TOTAL KAAM
-            </h3>
-
-            <b>
-                {money(total_work)}
-            </b>
-
+            <h3>TOTAL KAAM</h3>
+            <b>{money(total_work)}</b>
         </div>
 
         <div class="card">
-
-            <h3>
-                TOTAL BAAKI
-            </h3>
-
-            <b>
-                {money(final_balance)}
-            </b>
-
+            <h3>TOTAL BAAKI</h3>
+            <b>{money(final_balance)}</b>
         </div>
 
     </div>
+
 
     <div class="two">
 
@@ -3584,6 +4034,7 @@ def reports():
 
         </div>
 
+
         <div class="panel">
 
             <h3>
@@ -3592,19 +4043,12 @@ def reports():
 
             <div class="table">
 
-            <table>
+                <table>
 
-                <tr>
-
-                    <th>
-                        Customer
-                    </th>
-
-                    <th>
-                        Total Work
-                    </th>
-
-                </tr>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Total Work</th>
+                    </tr>
 
     """
 
@@ -3612,23 +4056,23 @@ def reports():
 
         body += f"""
 
-                <tr>
+                    <tr>
 
-                    <td>
-                        {esc(customer["name"])}
-                    </td>
+                        <td>
+                            {esc(customer["name"])}
+                        </td>
 
-                    <td>
-                        {money(customer["total"])}
-                    </td>
+                        <td>
+                            {money(customer["total"])}
+                        </td>
 
-                </tr>
+                    </tr>
 
         """
 
     body += """
 
-            </table>
+                </table>
 
             </div>
 
@@ -3636,13 +4080,30 @@ def reports():
 
     </div>
 
-    <div class="panel no-print">
 
-        <button
-            onclick="window.print()"
-        >
-            🖨️ PRINT REPORT
-        </button>
+    <div class="panel">
+
+        <h3>
+            📄 Report Actions
+        </h3>
+
+        <div class="actions">
+
+            <button
+                onclick="window.print()"
+                class="blue"
+            >
+                🖨️ PRINT REPORT
+            </button>
+
+            <a
+                href="/reports/pdf"
+                class="btn green"
+            >
+                📄 DOWNLOAD PDF
+            </a>
+
+        </div>
 
     </div>
 
@@ -3654,6 +4115,428 @@ def reports():
     )
 
 
+# =================================
+# PDF REPORT
+# =================================
+
+@app.get("/reports/pdf")
+@login_required
+def reports_pdf():
+
+    try:
+
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import (
+            SimpleDocTemplate,
+            Paragraph,
+            Spacer,
+            Table,
+            TableStyle
+        )
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.enums import TA_CENTER
+
+    except ImportError:
+
+        flash(
+            "PDF ke liye reportlab install karo: pip install reportlab",
+            "error"
+        )
+
+        return redirect(
+            url_for("reports")
+        )
+
+
+    con = db()
+
+    customers_count = con.execute(
+        """
+        SELECT COUNT(*) c
+        FROM customers
+        WHERE active=1
+        """
+    ).fetchone()["c"]
+
+
+    jobs_count = con.execute(
+        """
+        SELECT COUNT(*) c
+        FROM jobs
+        """
+    ).fetchone()["c"]
+
+
+    total_work = con.execute(
+        """
+        SELECT COALESCE(
+            SUM(work_amount), 0
+        ) c
+        FROM jobs
+        """
+    ).fetchone()["c"]
+
+
+    total_payment = con.execute(
+        """
+        SELECT COALESCE(
+            SUM(amount), 0
+        ) c
+        FROM payments
+        """
+    ).fetchone()["c"]
+
+
+    pending = con.execute(
+        """
+        SELECT COUNT(*) c
+        FROM jobs
+        WHERE status != 'Delivered'
+        """
+    ).fetchone()["c"]
+
+
+    delivered = (
+        jobs_count - pending
+    )
+
+
+    final_balance = (
+        total_work - total_payment
+    )
+
+
+    top_customers = con.execute(
+        """
+        SELECT
+            customers.name,
+            COALESCE(
+                SUM(jobs.work_amount),
+                0
+            ) total
+        FROM jobs
+        JOIN customers
+            ON jobs.customer_id =
+               customers.id
+        GROUP BY customers.id
+        ORDER BY total DESC
+        LIMIT 10
+        """
+    ).fetchall()
+
+
+    con.close()
+
+
+    pdf_name = (
+        "RK_Jewellers_Report_"
+        + datetime.now().strftime(
+            "%Y%m%d_%H%M%S"
+        )
+        + ".pdf"
+    )
+
+
+    pdf_path = (
+        APP_DIR / pdf_name
+    )
+
+
+    doc = SimpleDocTemplate(
+        str(pdf_path),
+        pagesize=A4,
+        rightMargin=35,
+        leftMargin=35,
+        topMargin=35,
+        bottomMargin=35
+    )
+
+
+    styles = getSampleStyleSheet()
+
+
+    title_style = styles["Title"]
+    title_style.alignment = TA_CENTER
+
+
+    normal = styles["Normal"]
+
+
+    story = []
+
+
+    story.append(
+        Paragraph(
+            "R.K JEWELERS",
+            title_style
+        )
+    )
+
+
+    story.append(
+        Paragraph(
+            "Jewellery Job Work & Customer Ledger",
+            normal
+        )
+    )
+
+
+    story.append(
+        Spacer(1, 15)
+    )
+
+
+    story.append(
+        Paragraph(
+            "Business Report",
+            styles["Heading2"]
+        )
+    )
+
+
+    story.append(
+        Paragraph(
+            "Generated: "
+            + datetime.now().strftime(
+                "%d-%m-%Y %H:%M"
+            ),
+            normal
+        )
+    )
+
+
+    story.append(
+        Spacer(1, 15)
+    )
+
+
+    summary_data = [
+
+        ["Report", "Value"],
+
+        [
+            "Active Customers",
+            str(customers_count)
+        ],
+
+        [
+            "Total Jobs",
+            str(jobs_count)
+        ],
+
+        [
+            "Pending Jobs",
+            str(pending)
+        ],
+
+        [
+            "Delivered Jobs",
+            str(delivered)
+        ],
+
+        [
+            "Total Kaam",
+            money(total_work)
+        ],
+
+        [
+            "Total Payment",
+            money(total_payment)
+        ],
+
+        [
+            "Total Baaki",
+            money(final_balance)
+        ]
+
+    ]
+
+
+    summary_table = Table(
+        summary_data,
+        colWidths=[250, 180]
+    )
+
+
+    summary_table.setStyle(
+        TableStyle([
+
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.HexColor("#4a2915")
+            ),
+
+            (
+                "TEXTCOLOR",
+                (0, 0),
+                (-1, 0),
+                colors.white
+            ),
+
+            (
+                "FONTNAME",
+                (0, 0),
+                (-1, 0),
+                "Helvetica-Bold"
+            ),
+
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.5,
+                colors.grey
+            ),
+
+            (
+                "PADDING",
+                (0, 0),
+                (-1, -1),
+                8
+            )
+
+        ])
+    )
+
+
+    story.append(
+        summary_table
+    )
+
+
+    story.append(
+        Spacer(1, 20)
+    )
+
+
+    story.append(
+        Paragraph(
+            "Top Customers",
+            styles["Heading2"]
+        )
+    )
+
+
+    customer_data = [
+        [
+            "Customer",
+            "Total Work"
+        ]
+    ]
+
+
+    for customer in top_customers:
+
+        customer_data.append(
+            [
+                str(customer["name"]),
+                money(customer["total"])
+            ]
+        )
+
+
+    if len(customer_data) == 1:
+
+        customer_data.append(
+            [
+                "No customer data",
+                "-"
+            ]
+        )
+
+
+    customer_table = Table(
+        customer_data,
+        colWidths=[250, 180]
+    )
+
+
+    customer_table.setStyle(
+        TableStyle([
+
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.HexColor("#4a2915")
+            ),
+
+            (
+                "TEXTCOLOR",
+                (0, 0),
+                (-1, 0),
+                colors.white
+            ),
+
+            (
+                "FONTNAME",
+                (0, 0),
+                (-1, 0),
+                "Helvetica-Bold"
+            ),
+
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.5,
+                colors.grey
+            ),
+
+            (
+                "PADDING",
+                (0, 0),
+                (-1, -1),
+                8
+            )
+
+        ])
+    )
+
+
+    story.append(
+        customer_table
+    )
+
+
+    story.append(
+        Spacer(1, 25)
+    )
+
+
+    story.append(
+        Paragraph(
+            "R.K JEWELERS",
+            styles["Heading3"]
+        )
+    )
+
+
+    story.append(
+        Paragraph(
+            "Jewellery Job Work Management System",
+            normal
+        )
+    )
+
+
+    doc.build(story)
+
+
+    return send_file(
+        pdf_path,
+        as_attachment=True,
+        download_name=pdf_name
+    )
+
+
+# =================================
+# DATABASE BACKUP
+# =================================
+
 @app.get("/backup")
 @login_required
 def backup():
@@ -3661,6 +4544,7 @@ def backup():
     if not DB.exists():
 
         setup()
+
 
     filename = (
         "rk_jewellers_backup_"
@@ -3670,15 +4554,17 @@ def backup():
         + ".db"
     )
 
+
     target = (
-        BACKUP_DIR
-        / filename
+        BACKUP_DIR / filename
     )
+
 
     shutil.copy2(
         DB,
         target
     )
+
 
     return send_file(
         target,
@@ -3686,6 +4572,10 @@ def backup():
         download_name=filename
     )
 
+
+# =================================
+# RESTORE DATABASE
+# =================================
 
 @app.route(
     "/restore",
@@ -3699,6 +4589,7 @@ def restore():
         backup_file = request.files.get(
             "backup"
         )
+
 
         if (
             not backup_file
@@ -3717,6 +4608,7 @@ def restore():
                 url_for("restore")
             )
 
+
         safety_name = (
             "before_restore_"
             + datetime.now().strftime(
@@ -3725,10 +4617,11 @@ def restore():
             + ".db"
         )
 
+
         safety_path = (
-            BACKUP_DIR
-            / safety_name
+            BACKUP_DIR / safety_name
         )
+
 
         if DB.exists():
 
@@ -3737,20 +4630,24 @@ def restore():
                 safety_path
             )
 
+
         temp_path = (
-            BACKUP_DIR
-            / "restore_temp.db"
+            BACKUP_DIR /
+            "restore_temp.db"
         )
+
 
         backup_file.save(
             temp_path
         )
+
 
         try:
 
             test_con = sqlite3.connect(
                 temp_path
             )
+
 
             test_con.execute(
                 """
@@ -3760,19 +4657,24 @@ def restore():
                 """
             )
 
+
             test_con.close()
+
 
             shutil.copy2(
                 temp_path,
                 DB
             )
 
+
             setup()
+
 
             flash(
                 "Backup restore ho gaya.",
                 "success"
             )
+
 
         except Exception as e:
 
@@ -3781,29 +4683,31 @@ def restore():
                 "error"
             )
 
+
         finally:
 
             if temp_path.exists():
 
                 temp_path.unlink()
 
+
         return redirect(
             url_for("restore")
         )
 
-    body = f"""
+
+    body = """
 
     <h2>
         ♻️ Restore Backup
     </h2>
 
+
     <div class="panel">
 
         <p>
 
-            <b>
-                Important:
-            </b>
+            <b>Important:</b>
 
             Restore karne se current
             database replace hoga.
@@ -3812,6 +4716,7 @@ def restore():
             automatically banega.
 
         </p>
+
 
         <form
             method="post"
@@ -3827,6 +4732,7 @@ def restore():
 
             <br><br>
 
+
             <button
                 class="red"
                 type="submit"
@@ -3838,6 +4744,7 @@ def restore():
 
     </div>
 
+
     <div class="panel">
 
         <h3>
@@ -3845,9 +4752,8 @@ def restore():
         </h3>
 
         <p class="muted">
-
-            {esc(str(BACKUP_DIR))}
-
+            Database backups automatically
+            yahan store honge.
         </p>
 
     </div>
@@ -3859,6 +4765,10 @@ def restore():
         body
     )
 
+
+# =================================
+# SHOP INFORMATION
+# =================================
 
 @app.get("/about")
 @login_required
@@ -3881,18 +4791,22 @@ def about():
             Customer Ledger
         </p>
 
+
         <p>
-            <b>
-                Owner:
-            </b>
+
+            <b>Owner:</b>
             Ramkishor Soni
+
         </p>
 
+
         <hr>
+
 
         <h3>
             Available Services
         </h3>
+
 
         <p>
             💍 Nag Setting
@@ -3910,18 +4824,19 @@ def about():
             💎 Other Jewellery Work
         </p>
 
+
         <hr>
 
+
         <p>
-            <b>
-                Developer:
-            </b>
+
+            <b>Developer:</b>
             KRISHNA
+
         </p>
 
-        <p class="muted">
 
-            Upgraded system with:
+        <p class="muted">
 
             Ledger,
             Search,
@@ -3930,9 +4845,10 @@ def about():
             Weight Details,
             Payment Modes,
             Reports,
+            PDF,
             Backup,
-            Restore,
-            Login.
+            Restore
+            aur Login System.
 
         </p>
 
@@ -3940,11 +4856,16 @@ def about():
 
     """
 
+
     return page(
         "Shop Information",
         body
     )
 
+
+# =================================
+# START APPLICATION
+# =================================
 
 setup()
 
@@ -3973,11 +4894,8 @@ if __name__ == "__main__":
     )
 
     print(
-        "Username: admin"
-    )
-
-    print(
-        "Password: 1234"
+        "Login page open karke"
+        " apna username/password enter karein."
     )
 
     print(
@@ -3987,6 +4905,7 @@ if __name__ == "__main__":
     print(
         "==================================="
     )
+
 
     app.run(
         host="0.0.0.0",
