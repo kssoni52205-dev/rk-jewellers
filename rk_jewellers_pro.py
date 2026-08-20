@@ -8,9 +8,7 @@ from flask import (
     send_file,
     url_for
 )
-
 from werkzeug.security import generate_password_hash, check_password_hash
-
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -21,28 +19,14 @@ import shutil
 import html
 
 # ============================================================
-# PDF
-# ============================================================
-
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle
-)
-
-# ============================================================
-# APP SETTINGS
+# R.K JEWELERS PRO
+# SINGLE FILE VERSION
+# DEVELOPER: KRISHNA
 # ============================================================
 
 APP_DIR = Path(__file__).resolve().parent
-
 DB = APP_DIR / "rk_jewellers.db"
-
+DB_PATH = DB
 BACKUP_DIR = APP_DIR / "backups"
 BACKUP_DIR.mkdir(exist_ok=True)
 
@@ -57,19 +41,11 @@ app.secret_key = (
 # LOGIN
 # ============================================================
 
-ADMIN_USER = os.environ.get(
-    "RK_ADMIN_USER",
-    "admin"
-)
+ADMIN_USER = os.environ.get("RK_ADMIN_USER", "admin")
+ADMIN_PASSWORD = os.environ.get("RK_ADMIN_PASSWORD", "1234")
 
-ADMIN_PASSWORD = os.environ.get(
-    "RK_ADMIN_PASSWORD",
-    "1234"
-)
+ADMIN_PASSWORD_HASH = generate_password_hash(ADMIN_PASSWORD)
 
-ADMIN_PASSWORD_HASH = generate_password_hash(
-    ADMIN_PASSWORD
-)
 
 # ============================================================
 # DATABASE
@@ -77,14 +53,12 @@ ADMIN_PASSWORD_HASH = generate_password_hash(
 
 def db():
     con = sqlite3.connect(DB)
-
     con.row_factory = sqlite3.Row
-
-    con.execute(
-        "PRAGMA foreign_keys = ON"
-    )
-
+    con.execute("PRAGMA foreign_keys = ON")
     return con
+
+
+get_db = db
 
 
 def setup():
@@ -92,11 +66,11 @@ def setup():
     con = db()
 
     con.executescript("""
-    
     CREATE TABLE IF NOT EXISTS customers(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         mobile TEXT DEFAULT '',
+        phone TEXT DEFAULT '',
         address TEXT DEFAULT '',
         notes TEXT DEFAULT '',
         active INTEGER NOT NULL DEFAULT 1,
@@ -105,63 +79,46 @@ def setup():
 
     CREATE TABLE IF NOT EXISTS jobs(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-        customer_id INTEGER NOT NULL,
-
+        customer_id INTEGER,
+        customer TEXT DEFAULT '',
         date TEXT NOT NULL,
-
-        jewellery TEXT NOT NULL,
-
-        work TEXT NOT NULL DEFAULT 'Other',
-
-        status TEXT NOT NULL DEFAULT 'Pending',
+        jewellery TEXT DEFAULT '',
+        job_type TEXT DEFAULT '',
+        work TEXT DEFAULT '',
+        status TEXT DEFAULT 'Pending',
 
         maal_aaya TEXT DEFAULT '',
-
         maal_diyaa TEXT DEFAULT '',
 
         gross_weight REAL DEFAULT 0,
-
         nag_weight REAL DEFAULT 0,
-
-        total_weight REAL DEFAULT 0,
-
-        loss REAL DEFAULT 0,
-
-        final_weight REAL DEFAULT 0,
-
         stone_weight REAL DEFAULT 0,
 
+        total_weight REAL DEFAULT 0,
+        loss REAL DEFAULT 0,
+        final_weight REAL DEFAULT 0,
         net_weight REAL DEFAULT 0,
 
+        taanch TEXT DEFAULT '',
         quantity INTEGER DEFAULT 1,
 
-        taanch TEXT DEFAULT '',
-
         work_amount REAL DEFAULT 0,
-
         notes TEXT DEFAULT '',
 
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
 
         FOREIGN KEY(customer_id)
         REFERENCES customers(id)
-        ON DELETE CASCADE
+        ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS payments(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-        customer_id INTEGER NOT NULL,
-
+        customer_id INTEGER,
         date TEXT NOT NULL,
-
         amount REAL NOT NULL DEFAULT 0,
-
-        mode TEXT NOT NULL DEFAULT 'Cash',
-
+        mode TEXT DEFAULT 'Cash',
         note TEXT DEFAULT '',
-
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
 
         FOREIGN KEY(customer_id)
@@ -180,108 +137,115 @@ def setup():
 
     CREATE INDEX IF NOT EXISTS idx_payments_date
     ON payments(date);
-
     """)
 
-    # ========================================================
-    # OLD DATABASE UPGRADE
-    # ========================================================
+    # --------------------------------------------------------
+    # CUSTOMERS OLD DATABASE UPGRADE
+    # --------------------------------------------------------
 
-    customer_columns = {
-        row["name"]
-        for row in con.execute(
+    existing = {
+        r["name"]
+        for r in con.execute(
             "PRAGMA table_info(customers)"
         ).fetchall()
     }
 
-    customer_add = {
+    customer_cols = {
         "mobile": "TEXT DEFAULT ''",
+        "phone": "TEXT DEFAULT ''",
         "address": "TEXT DEFAULT ''",
         "notes": "TEXT DEFAULT ''",
         "active": "INTEGER NOT NULL DEFAULT 1",
         "created_at": "TEXT"
     }
 
-    for column, definition in customer_add.items():
+    for col, definition in customer_cols.items():
 
-        if column not in customer_columns:
+        if col not in existing:
 
             con.execute(
                 f"""
                 ALTER TABLE customers
-                ADD COLUMN {column} {definition}
+                ADD COLUMN {col} {definition}
                 """
             )
 
-    job_columns = {
-        row["name"]
-        for row in con.execute(
+    # --------------------------------------------------------
+    # JOBS OLD DATABASE UPGRADE
+    # --------------------------------------------------------
+
+    existing = {
+        r["name"]
+        for r in con.execute(
             "PRAGMA table_info(jobs)"
         ).fetchall()
     }
 
-    job_add = {
-        "status": "TEXT NOT NULL DEFAULT 'Pending'",
+    job_cols = {
+        "customer_id": "INTEGER",
+        "customer": "TEXT DEFAULT ''",
+        "date": "TEXT",
+        "jewellery": "TEXT DEFAULT ''",
+        "job_type": "TEXT DEFAULT ''",
+        "work": "TEXT DEFAULT ''",
+        "status": "TEXT DEFAULT 'Pending'",
         "maal_aaya": "TEXT DEFAULT ''",
         "maal_diyaa": "TEXT DEFAULT ''",
         "gross_weight": "REAL DEFAULT 0",
         "nag_weight": "REAL DEFAULT 0",
+        "stone_weight": "REAL DEFAULT 0",
         "total_weight": "REAL DEFAULT 0",
         "loss": "REAL DEFAULT 0",
         "final_weight": "REAL DEFAULT 0",
-        "stone_weight": "REAL DEFAULT 0",
         "net_weight": "REAL DEFAULT 0",
-        "quantity": "INTEGER DEFAULT 1",
         "taanch": "TEXT DEFAULT ''",
+        "quantity": "INTEGER DEFAULT 1",
         "work_amount": "REAL DEFAULT 0",
         "notes": "TEXT DEFAULT ''",
         "created_at": "TEXT"
     }
 
-    for column, definition in job_add.items():
+    for col, definition in job_cols.items():
 
-        if column not in job_columns:
+        if col not in existing:
 
             con.execute(
                 f"""
                 ALTER TABLE jobs
-                ADD COLUMN {column} {definition}
+                ADD COLUMN {col} {definition}
                 """
             )
 
-    payment_columns = {
-        row["name"]
-        for row in con.execute(
+    # --------------------------------------------------------
+    # PAYMENTS OLD DATABASE UPGRADE
+    # --------------------------------------------------------
+
+    existing = {
+        r["name"]
+        for r in con.execute(
             "PRAGMA table_info(payments)"
         ).fetchall()
     }
 
-    if "mode" not in payment_columns:
+    payment_cols = {
+        "customer_id": "INTEGER",
+        "date": "TEXT",
+        "amount": "REAL NOT NULL DEFAULT 0",
+        "mode": "TEXT DEFAULT 'Cash'",
+        "note": "TEXT DEFAULT ''",
+        "created_at": "TEXT"
+    }
 
-        con.execute(
-            """
-            ALTER TABLE payments
-            ADD COLUMN mode TEXT NOT NULL DEFAULT 'Cash'
-            """
-        )
+    for col, definition in payment_cols.items():
 
-    if "note" not in payment_columns:
+        if col not in existing:
 
-        con.execute(
-            """
-            ALTER TABLE payments
-            ADD COLUMN note TEXT DEFAULT ''
-            """
-        )
-
-    if "created_at" not in payment_columns:
-
-        con.execute(
-            """
-            ALTER TABLE payments
-            ADD COLUMN created_at TEXT
-            """
-        )
+            con.execute(
+                f"""
+                ALTER TABLE payments
+                ADD COLUMN {col} {definition}
+                """
+            )
 
     con.commit()
     con.close()
@@ -292,14 +256,10 @@ def setup():
 # ============================================================
 
 def money(value):
-
-    return "₹ {:,.2f}".format(
-        float(value or 0)
-    )
+    return "₹ {:,.2f}".format(float(value or 0))
 
 
 def esc(value):
-
     return html.escape(
         "" if value is None else str(value)
     )
@@ -307,52 +267,32 @@ def esc(value):
 
 def parse_float(name, default=0.0):
 
-    raw = request.form.get(
-        name,
-        ""
-    ).strip()
+    raw = request.form.get(name, "").strip()
 
     if not raw:
         return default
 
     try:
-        value = float(raw)
-
+        return float(raw)
     except ValueError:
-
         raise ValueError(
             f"{name} me valid number dalo."
         )
-
-    if value < 0:
-
-        raise ValueError(
-            f"{name} negative nahi ho sakta."
-        )
-
-    return value
 
 
 def parse_int(name, default=1):
 
-    raw = request.form.get(
-        name,
-        ""
-    ).strip()
+    raw = request.form.get(name, "").strip()
 
     if not raw:
         return default
 
     try:
-        value = int(raw)
-
+        return int(raw)
     except ValueError:
-
         raise ValueError(
             f"{name} me valid number dalo."
         )
-
-    return value
 
 
 def login_required(view):
@@ -361,15 +301,9 @@ def login_required(view):
     def wrapped(*args, **kwargs):
 
         if not session.get("logged_in"):
+            return redirect(url_for("login"))
 
-            return redirect(
-                url_for("login")
-            )
-
-        return view(
-            *args,
-            **kwargs
-        )
+        return view(*args, **kwargs)
 
     return wrapped
 
@@ -380,7 +314,6 @@ def login_required(view):
 
 BASE_HTML = """
 <!DOCTYPE html>
-
 <html lang="hi">
 
 <head>
@@ -392,9 +325,7 @@ BASE_HTML = """
     content="width=device-width, initial-scale=1"
 >
 
-<title>
-    {{ title }} - R.K JEWELERS
-</title>
+<title>{{ title }} - R.K JEWELERS</title>
 
 <style>
 
@@ -403,560 +334,392 @@ BASE_HTML = """
 }
 
 body{
-
     margin:0;
-
-    font-family:
-        Arial,
-        "Noto Sans Devanagari",
-        sans-serif;
-
-    background:
-        linear-gradient(
-            135deg,
-            #fff8df,
-            #ead19a
-        );
-
+    font-family:Arial,Helvetica,sans-serif;
+    background:linear-gradient(
+        135deg,
+        #fff8df,
+        #ead19a
+    );
     color:#342316;
 }
 
 header{
-
-    background:
-        linear-gradient(
-            135deg,
-            #241309,
-            #633a18
-        );
-
+    background:linear-gradient(
+        135deg,
+        #241309,
+        #633a18
+    );
     color:white;
-
     padding:18px;
-
     text-align:center;
-
-    border-bottom:
-        5px solid #e3b93f;
+    border-bottom:5px solid #e3b93f;
 }
 
 header h1{
-
     margin:0;
-
     color:#ffe39a;
-
     font-size:32px;
 }
 
 header p{
-
     margin:5px 0 0;
-
-    color:#fff;
 }
 
 .layout{
-
     display:flex;
-
-    min-height:
-        calc(100vh - 100px);
+    min-height:calc(100vh - 100px);
 }
 
 nav{
-
     width:250px;
-
     background:#2b180d;
-
     padding:15px;
-
     flex:none;
 }
 
 nav a{
-
     display:block;
-
     text-decoration:none;
-
     color:white;
-
     padding:12px;
-
     margin:6px 0;
-
     border-radius:10px;
-
     font-weight:bold;
 }
 
 nav a:hover{
-
     background:#d7a72c;
-
     color:#241309;
 }
 
 .userbox{
-
     color:#ffe39a;
-
     padding:8px 12px;
-
     font-size:12px;
-
-    border-bottom:
-        1px solid #6d4a27;
-
+    border-bottom:1px solid #6d4a27;
     margin-bottom:10px;
 }
 
 main{
-
     flex:1;
-
     padding:22px;
-
     max-width:1700px;
+    width:100%;
 }
 
 .cardbox{
-
     display:grid;
-
-    grid-template-columns:
-        repeat(4,1fr);
-
+    grid-template-columns:repeat(4,1fr);
     gap:15px;
 }
 
 .card{
-
     background:white;
-
     padding:20px;
-
     border-radius:16px;
-
-    box-shadow:
-        0 8px 25px #76501f33;
-
-    border-left:
-        6px solid #d6a52e;
+    box-shadow:0 8px 25px #76501f33;
+    border-left:6px solid #d6a52e;
 }
 
 .card h3{
-
     margin:0;
-
     font-size:13px;
-
     color:#777;
 }
 
 .card b{
-
     display:block;
-
     font-size:24px;
-
     margin-top:8px;
 }
 
 .panel{
-
     background:white;
-
     padding:20px;
-
     margin:18px 0;
-
     border-radius:16px;
-
-    box-shadow:
-        0 8px 25px #76501f33;
+    box-shadow:0 8px 25px #76501f33;
 }
 
 .form{
-
     display:grid;
-
-    grid-template-columns:
-        repeat(3,1fr);
-
+    grid-template-columns:repeat(3,1fr);
     gap:12px;
 }
 
 input,
 select,
 textarea{
-
     width:100%;
-
     padding:12px;
-
-    border:
-        1px solid #d6c19a;
-
+    border:1px solid #d6c19a;
     border-radius:9px;
-
     font-size:15px;
-
     background:#fffdf7;
 }
 
 textarea{
-
     min-height:80px;
+    resize:vertical;
 }
 
 label{
-
     font-weight:bold;
-
     font-size:13px;
-
     display:block;
-
     margin-bottom:5px;
 }
 
 button,
 .btn{
-
     border:0;
-
     padding:11px 15px;
-
     border-radius:9px;
-
     background:#d6a52e;
-
     color:#241309;
-
     font-weight:bold;
-
     cursor:pointer;
-
     text-decoration:none;
-
     display:inline-block;
 }
 
 button:hover,
 .btn:hover{
-
-    opacity:.88;
+    opacity:.85;
 }
 
 .green{
-
     background:#198754;
-
     color:white;
 }
 
 .red{
-
     background:#b52d38;
-
     color:white;
 }
 
 .blue{
-
     background:#2864c7;
-
     color:white;
 }
 
 .gray{
-
     background:#6c757d;
-
     color:white;
 }
 
 .small{
-
     padding:8px 10px;
-
     font-size:12px;
 }
 
 .table{
-
     overflow-x:auto;
 }
 
 table{
-
     width:100%;
-
     border-collapse:collapse;
-
-    min-width:900px;
+    min-width:800px;
 }
 
 th{
-
     background:#4a2915;
-
     color:#ffe49b;
-
     padding:11px;
-
     text-align:left;
-
-    white-space:nowrap;
 }
 
 td{
-
     padding:10px;
-
-    border-bottom:
-        1px solid #eee2c9;
-
+    border-bottom:1px solid #eee2c9;
     vertical-align:top;
 }
 
 .msg{
-
     background:#dff3e6;
-
     padding:12px;
-
     border-radius:10px;
-
     margin-bottom:15px;
-
     color:#17663c;
-
     font-weight:bold;
 }
 
 .err{
-
     background:#ffe2e4;
-
     padding:12px;
-
     border-radius:10px;
-
     margin-bottom:15px;
-
     color:#8b1e2b;
-
     font-weight:bold;
 }
 
 .toolbar{
-
     display:flex;
-
     gap:10px;
-
     flex-wrap:wrap;
-
     align-items:end;
 }
 
 .toolbar .field{
-
     min-width:180px;
 }
 
 .badge{
-
     display:inline-block;
-
     padding:5px 8px;
-
     border-radius:999px;
-
     background:#eee;
-
     font-size:12px;
-
     font-weight:bold;
 }
 
 .badge.green{
-
     background:#dff3e6;
-
     color:#17663c;
 }
 
 .badge.yellow{
-
     background:#fff1bf;
-
     color:#7a5b00;
 }
 
 .badge.red{
-
     background:#ffe2e4;
-
     color:#8b1e2b;
 }
 
 .muted{
-
     color:#777;
 }
 
-.debit{
-
-    color:#b52d38;
-
-    font-weight:bold;
-}
-
-.credit{
-
-    color:#198754;
-
-    font-weight:bold;
-}
-
-.actions{
-
-    display:flex;
-
-    gap:6px;
-
-    flex-wrap:wrap;
-}
-
 .login{
-
     max-width:420px;
-
     margin:70px auto;
 }
 
 .login .panel{
-
     padding:30px;
 }
 
+.balance{
+    font-size:28px;
+    font-weight:bold;
+}
+
+.debit{
+    color:#b52d38;
+    font-weight:bold;
+}
+
+.credit{
+    color:#198754;
+    font-weight:bold;
+}
+
+.actions{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+}
+
+.two{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:15px;
+}
+
+.three{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:15px;
+}
+
 .mobile-menu{
-
     display:none;
-
     background:#2b180d;
-
     color:white;
-
     padding:10px;
-
     text-align:center;
 }
 
 .stat{
-
-    font-size:28px;
-
+    font-size:25px;
     font-weight:bold;
-
     margin-top:8px;
 }
 
-.info-grid{
-
-    display:grid;
-
-    grid-template-columns:
-        repeat(2,1fr);
-
-    gap:15px;
+.full{
+    grid-column:1/-1;
 }
 
 @media(max-width:1000px){
 
     .cardbox{
-
-        grid-template-columns:
-            repeat(2,1fr);
+        grid-template-columns:repeat(2,1fr);
     }
 
     .form{
-
-        grid-template-columns:
-            repeat(2,1fr);
+        grid-template-columns:repeat(2,1fr);
     }
 }
 
 @media(max-width:700px){
 
     .mobile-menu{
-
         display:block;
     }
 
     .layout{
-
         display:block;
     }
 
     nav{
-
         width:100%;
-
         display:none;
     }
 
     nav.show{
-
         display:block;
     }
 
     main{
-
         padding:10px;
     }
 
     .cardbox{
-
-        grid-template-columns:
-            repeat(2,1fr);
-
+        grid-template-columns:repeat(2,1fr);
         gap:8px;
     }
 
     .card{
-
         padding:14px;
     }
 
     .card b{
-
         font-size:18px;
     }
 
     .form{
-
         grid-template-columns:1fr;
     }
 
     .panel{
-
         padding:14px;
     }
 
     header h1{
-
         font-size:25px;
     }
 
-    .info-grid{
-
+    .two,
+    .three{
         grid-template-columns:1fr;
+    }
+
+    .toolbar .field{
+        min-width:100%;
     }
 }
 
@@ -966,25 +729,20 @@ td{
     nav,
     .mobile-menu,
     .no-print{
-
         display:none !important;
     }
 
     body{
-
         background:white;
     }
 
     .panel,
     .card{
-
         box-shadow:none;
     }
 
     main{
-
         max-width:none;
-
         padding:0;
     }
 }
@@ -997,26 +755,20 @@ td{
 
 <header>
 
-<h1>
-    R.K JEWELERS
-</h1>
+<h1>R.K JEWELERS</h1>
 
 <p>
-    JEWELLERY JOB WORK & CUSTOMER LEDGER
+JEWELLERY JOB WORK & CUSTOMER LEDGER
 </p>
 
 </header>
 
 <div class="mobile-menu">
 
-<button
-    onclick="
-        document
-        .getElementById('nav')
-        .classList.toggle('show')
-    "
->
-    ☰ MENU
+<button onclick="
+document.getElementById('nav').classList.toggle('show')
+">
+☰ MENU
 </button>
 
 </div>
@@ -1028,48 +780,30 @@ td{
 {% if session.get('logged_in') %}
 
 <div class="userbox">
-    Logged in as {{ session.get('user') }}
+Logged in as {{ session.get('user') }}
 </div>
 
-<a href="{{ url_for('home') }}">
-    🏠 Dashboard
-</a>
+<a href="{{ url_for('home') }}">🏠 Dashboard</a>
 
-<a href="{{ url_for('customers') }}">
-    👥 Customers
-</a>
+<a href="{{ url_for('customers') }}">👥 Customers</a>
 
-<a href="{{ url_for('jobs') }}">
-    💍 Job Entry
-</a>
+<a href="{{ url_for('jobs') }}">💍 Job Entry</a>
 
-<a href="{{ url_for('payments') }}">
-    💰 Payment Entry
-</a>
+<a href="{{ url_for('payments') }}">💰 Payment Entry</a>
 
-<a href="{{ url_for('ledger') }}">
-    📒 Customer Ledger
-</a>
+<a href="{{ url_for('ledger') }}">📒 Customer Ledger</a>
 
-<a href="{{ url_for('reports') }}">
-    📊 Reports
-</a>
+<a href="{{ url_for('reports') }}">📊 Reports</a>
 
-<a href="{{ url_for('backup') }}">
-    💾 Backup Database
-</a>
+<a href="{{ url_for('search') }}">🔎 Customer Search</a>
 
-<a href="{{ url_for('restore') }}">
-    ♻️ Restore Backup
-</a>
+<a href="{{ url_for('backup') }}">💾 Backup Database</a>
 
-<a href="{{ url_for('about') }}">
-    ℹ️ Shop Information
-</a>
+<a href="{{ url_for('restore') }}">♻️ Restore Backup</a>
 
-<a href="{{ url_for('logout') }}">
-    🚪 Logout
-</a>
+<a href="{{ url_for('about') }}">ℹ️ Shop Information</a>
+
+<a href="{{ url_for('logout') }}">🚪 Logout</a>
 
 {% endif %}
 
@@ -1077,34 +811,21 @@ td{
 
 <main>
 
-{% with messages =
-    get_flashed_messages(
-        category_filter=['success']
-    )
-%}
+{% with messages=get_flashed_messages(category_filter=['success']) %}
 
 {% for m in messages %}
 
-<div class="msg">
-    {{ m }}
-</div>
+<div class="msg">{{ m }}</div>
 
 {% endfor %}
 
 {% endwith %}
 
-
-{% with messages =
-    get_flashed_messages(
-        category_filter=['error']
-    )
-%}
+{% with messages=get_flashed_messages(category_filter=['error']) %}
 
 {% for m in messages %}
 
-<div class="err">
-    {{ m }}
-</div>
+<div class="err">{{ m }}</div>
 
 {% endfor %}
 
@@ -1135,15 +856,12 @@ def page(title, body):
 # LOGIN
 # ============================================================
 
-@app.route(
-    "/login",
-    methods=["GET", "POST"]
-)
+@app.route("/login", methods=["GET", "POST"])
 def login():
 
     if request.method == "POST":
 
-        username = request.form.get(
+        user = request.form.get(
             "username",
             ""
         ).strip()
@@ -1154,7 +872,7 @@ def login():
         )
 
         if (
-            username == ADMIN_USER
+            user == ADMIN_USER
             and check_password_hash(
                 ADMIN_PASSWORD_HASH,
                 password
@@ -1162,10 +880,8 @@ def login():
         ):
 
             session.clear()
-
             session["logged_in"] = True
-
-            session["user"] = username
+            session["user"] = user
 
             return redirect(
                 url_for("home")
@@ -1182,19 +898,15 @@ def login():
 
         <div class="panel">
 
-            <h2>
-                🔐 R.K JEWELERS Login
-            </h2>
+            <h2>🔐 R.K JEWELERS Login</h2>
 
             <p class="muted">
-                Shop Management System
+                Local shop management system
             </p>
 
             <form method="post">
 
-                <label>
-                    Username
-                </label>
+                <label>Username</label>
 
                 <input
                     name="username"
@@ -1204,9 +916,7 @@ def login():
 
                 <br><br>
 
-                <label>
-                    Password / PIN
-                </label>
+                <label>Password / PIN</label>
 
                 <input
                     type="password"
@@ -1221,7 +931,7 @@ def login():
                     class="green"
                     type="submit"
                 >
-                    🔐 LOGIN
+                    LOGIN
                 </button>
 
             </form>
@@ -1232,13 +942,14 @@ def login():
 
     """
 
-    return page(
-        "Login",
-        body
-    )
+    return page("Login", body)
 
 
-@app.get("/logout")
+# ============================================================
+# LOGOUT
+# ============================================================
+
+@app.route("/logout")
 def logout():
 
     session.clear()
@@ -1252,164 +963,107 @@ def logout():
 # DASHBOARD
 # ============================================================
 
-@app.get("/")
+@app.route("/")
 @login_required
 def home():
 
     con = db()
 
-    customers_count = con.execute(
-        """
-        SELECT COUNT(*)
+    customers_count = con.execute("""
+        SELECT COUNT(*) AS c
         FROM customers
         WHERE active=1
-        """
-    ).fetchone()[0]
+    """).fetchone()["c"]
 
-    jobs_count = con.execute(
-        """
-        SELECT COUNT(*)
+    jobs_count = con.execute("""
+        SELECT COUNT(*) AS c
         FROM jobs
-        """
-    ).fetchone()[0]
+    """).fetchone()["c"]
 
-    total_work = con.execute(
-        """
-        SELECT COALESCE(
-            SUM(work_amount),0
-        )
+    work_amount = con.execute("""
+        SELECT COALESCE(SUM(work_amount),0) AS c
         FROM jobs
-        """
-    ).fetchone()[0]
+    """).fetchone()["c"]
 
-    total_paid = con.execute(
-        """
-        SELECT COALESCE(
-            SUM(amount),0
-        )
+    paid_amount = con.execute("""
+        SELECT COALESCE(SUM(amount),0) AS c
         FROM payments
-        """
-    ).fetchone()[0]
+    """).fetchone()["c"]
 
-    pending = con.execute(
-        """
-        SELECT COUNT(*)
+    pending = con.execute("""
+        SELECT COUNT(*) AS c
         FROM jobs
         WHERE status != 'Delivered'
-        """
-    ).fetchone()[0]
+    """).fetchone()["c"]
 
     con.close()
 
-    balance = (
-        float(total_work or 0)
-        -
-        float(total_paid or 0)
-    )
+    balance = work_amount - paid_amount
 
     body = f"""
 
-    <h2>
-        🏠 Dashboard
-    </h2>
+    <h2>🏠 Dashboard</h2>
 
     <div class="cardbox">
 
         <div class="card">
-            <h3>
-                👥 Active Customers
-            </h3>
-            <b>
-                {customers_count}
-            </b>
+            <h3>ACTIVE CUSTOMERS</h3>
+            <b>{customers_count}</b>
         </div>
 
         <div class="card">
-            <h3>
-                💍 Total Jobs
-            </h3>
-            <b>
-                {jobs_count}
-            </b>
+            <h3>TOTAL JOBS</h3>
+            <b>{jobs_count}</b>
         </div>
 
         <div class="card">
-            <h3>
-                💰 Total Kaam
-            </h3>
-            <b>
-                {money(total_work)}
-            </b>
+            <h3>TOTAL KAAM</h3>
+            <b>{money(work_amount)}</b>
         </div>
 
         <div class="card">
-            <h3>
-                💵 Total Paid
-            </h3>
-            <b>
-                {money(total_paid)}
-            </b>
-        </div>
-
-    </div>
-
-    <div class="cardbox">
-
-        <div class="card">
-            <h3>
-                ⏳ Pending Jobs
-            </h3>
-            <b>
-                {pending}
-            </b>
+            <h3>TOTAL PAYMENT</h3>
+            <b>{money(paid_amount)}</b>
         </div>
 
         <div class="card">
-            <h3>
-                📒 Total Baaki
-            </h3>
-            <b class="debit">
-                {money(balance)}
-            </b>
+            <h3>BAAKI</h3>
+            <b class="debit">{money(balance)}</b>
+        </div>
+
+        <div class="card">
+            <h3>PENDING JOBS</h3>
+            <b>{pending}</b>
         </div>
 
     </div>
 
     <div class="panel">
 
-        <h2>
-            💎 R.K JEWELERS
-        </h2>
+        <h3>💎 R.K JEWELERS PRO</h3>
 
         <p>
-            Jewellery Job Work Management System
+            Jewellery Job Work, Customer Ledger,
+            Payment Tracking aur Automatic Weight Calculation.
         </p>
 
         <div class="actions">
 
-            <span class="badge yellow">
-                Nag Setting
-            </span>
+            <a class="btn" href="{url_for('customers')}">
+                👥 Customers
+            </a>
 
-            <span class="badge yellow">
-                Kachi Jadai
-            </span>
+            <a class="btn" href="{url_for('jobs')}">
+                💍 New Job
+            </a>
 
-            <span class="badge yellow">
-                Chilai
-            </span>
+            <a class="btn green" href="{url_for('payments')}">
+                💰 Payment
+            </a>
 
-            <span class="badge green">
-                Customer Ledger
-            </span>
-
-            <span class="badge green">
-                Automatic Weight Calculation
-            </span>
-
-            <span class="badge">
-                PDF Reports
-            </span>
+            <a class="btn blue" href="{url_for('ledger')}">
+                📒 Ledger
+            </a>
 
         </div>
 
@@ -1423,20 +1077,20 @@ def home():
 
     """
 
-    return page(
-        "Dashboard",
-        body
-    )
+    return page("Dashboard", body)
+
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    return redirect(url_for("home"))
 
 
 # ============================================================
 # CUSTOMERS
 # ============================================================
 
-@app.route(
-    "/customers",
-    methods=["GET", "POST"]
-)
+@app.route("/customers", methods=["GET", "POST"])
 @login_required
 def customers():
 
@@ -1474,29 +1128,27 @@ def customers():
                 ).strip()
 
                 if not name:
-
                     raise ValueError(
                         "Customer name zaroori hai."
                     )
 
-                con.execute(
-                    """
+                con.execute("""
                     INSERT INTO customers
                     (
                         name,
                         mobile,
+                        phone,
                         address,
                         notes
                     )
-                    VALUES(?,?,?,?)
-                    """,
-                    (
-                        name,
-                        mobile,
-                        address,
-                        notes
-                    )
-                )
+                    VALUES(?,?,?,?,?)
+                """, (
+                    name,
+                    mobile,
+                    mobile,
+                    address,
+                    notes
+                ))
 
                 con.commit()
 
@@ -1507,21 +1159,18 @@ def customers():
 
             elif action == "delete":
 
-                customer_id = int(
+                cid = int(
                     request.form.get(
                         "customer_id",
                         "0"
                     )
                 )
 
-                con.execute(
-                    """
+                con.execute("""
                     UPDATE customers
                     SET active=0
                     WHERE id=?
-                    """,
-                    (customer_id,)
-                )
+                """, (cid,))
 
                 con.commit()
 
@@ -1539,64 +1188,54 @@ def customers():
                 "error"
             )
 
-        finally:
-
-            con.close()
+        con.close()
 
         return redirect(
             url_for("customers")
         )
 
-    rows = con.execute(
-        """
+    rows = con.execute("""
         SELECT
             c.*,
 
-            COUNT(j.id)
-                AS jobs_count,
+            (
+                SELECT COUNT(*)
+                FROM jobs j
+                WHERE j.customer_id=c.id
+            ) AS jobs_count,
 
-            COALESCE(
-                SUM(j.work_amount),
-                0
-            )
-                AS total_work,
+            (
+                SELECT COALESCE(
+                    SUM(j.work_amount),0
+                )
+                FROM jobs j
+                WHERE j.customer_id=c.id
+            ) AS total_work,
 
-            COALESCE(
-                (
-                    SELECT SUM(p.amount)
-                    FROM payments p
-                    WHERE p.customer_id=c.id
-                ),
-                0
-            )
-                AS total_paid
+            (
+                SELECT COALESCE(
+                    SUM(p.amount),0
+                )
+                FROM payments p
+                WHERE p.customer_id=c.id
+            ) AS total_paid
 
         FROM customers c
 
-        LEFT JOIN jobs j
-            ON j.customer_id=c.id
-
         WHERE c.active=1
 
-        GROUP BY c.id
-
         ORDER BY c.name
-        """
-    ).fetchall()
+    """).fetchall()
 
     con.close()
 
     body = """
 
-    <h2>
-        👥 Customers
-    </h2>
+    <h2>👥 Customers</h2>
 
     <div class="panel">
 
-        <h3>
-            ➕ Add New Customer
-        </h3>
+        <h3>➕ Add New Customer</h3>
 
         <form method="post">
 
@@ -1609,10 +1248,7 @@ def customers():
             <div class="form">
 
                 <div>
-                    <label>
-                        Customer Name
-                    </label>
-
+                    <label>Customer Name</label>
                     <input
                         name="name"
                         required
@@ -1621,39 +1257,27 @@ def customers():
                 </div>
 
                 <div>
-                    <label>
-                        Mobile
-                    </label>
-
+                    <label>Mobile</label>
                     <input
                         name="mobile"
-                        placeholder="Mobile"
+                        placeholder="Mobile number"
                     >
                 </div>
 
                 <div>
-                    <label>
-                        Address
-                    </label>
-
+                    <label>Address</label>
                     <input
                         name="address"
                         placeholder="Address"
                     >
                 </div>
 
-                <div
-                    style="grid-column:1/-1"
-                >
-
-                    <label>
-                        Notes
-                    </label>
-
+                <div class="full">
+                    <label>Notes</label>
                     <textarea
                         name="notes"
+                        placeholder="Notes"
                     ></textarea>
-
                 </div>
 
             </div>
@@ -1664,55 +1288,34 @@ def customers():
                 class="green"
                 type="submit"
             >
-                💾 SAVE CUSTOMER
+                💾 Save Customer
             </button>
 
         </form>
 
     </div>
 
-
     <div class="panel">
 
-        <h3>
-            📋 Customer List
-        </h3>
+        <h3>📋 Customer List</h3>
 
         <div class="table">
 
             <table>
 
-                <tr>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Mobile</th>
+                        <th>Jobs</th>
+                        <th>Total Kaam</th>
+                        <th>Paid</th>
+                        <th>Baaki</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
 
-                    <th>
-                        Name
-                    </th>
-
-                    <th>
-                        Mobile
-                    </th>
-
-                    <th>
-                        Jobs
-                    </th>
-
-                    <th>
-                        Total Kaam
-                    </th>
-
-                    <th>
-                        Paid
-                    </th>
-
-                    <th>
-                        Baaki
-                    </th>
-
-                    <th>
-                        Action
-                    </th>
-
-                </tr>
+                <tbody>
 
     """
 
@@ -1726,121 +1329,88 @@ def customers():
 
         body += f"""
 
-                <tr>
+                    <tr>
 
-                    <td>
-                        <b>
-                            {esc(r["name"])}
-                        </b>
+                        <td>
+                            <b>{esc(r["name"])}</b>
+                            <br>
+                            <span class="muted">
+                                {esc(r["address"])}
+                            </span>
+                        </td>
 
-                        <br>
+                        <td>
+                            {esc(r["mobile"] or r["phone"])}
+                        </td>
 
-                        <span class="muted">
-                            {esc(r["address"])}
-                        </span>
-                    </td>
+                        <td>
+                            {r["jobs_count"]}
+                        </td>
 
-                    <td>
-                        {esc(r["mobile"])}
-                    </td>
+                        <td>
+                            {money(r["total_work"])}
+                        </td>
 
-                    <td>
-                        {r["jobs_count"]}
-                    </td>
+                        <td class="credit">
+                            {money(r["total_paid"])}
+                        </td>
 
-                    <td>
-                        {money(r["total_work"])}
-                    </td>
+                        <td class="debit">
+                            {money(balance)}
+                        </td>
 
-                    <td class="credit">
-                        {money(r["total_paid"])}
-                    </td>
+                        <td>
 
-                    <td class="debit">
-                        {money(balance)}
-                    </td>
+                            <div class="actions">
 
-                    <td>
+                                <a
+                                    class="btn small"
+                                    href="{url_for(
+                                        'ledger',
+                                        customer_id=r['id']
+                                    )}"
+                                >
+                                    📒 Ledger
+                                </a>
 
-                        <div class="actions">
-
-                            <a
-                                class="btn small"
-                                href="{url_for(
-                                    'ledger',
-                                    customer_id=r['id']
-                                )}"
-                            >
-                                📒 LEDGER
-                            </a>
-
-                            <a
-                                class="btn small blue"
-                                href="{url_for(
-                                    'jobs',
-                                    customer_id=r['id']
-                                )}"
-                            >
-                                💍 JOB
-                            </a>
-
-                            <form
-                                method="post"
-                                style="display:inline"
-                                onsubmit="
-                                    return confirm(
-                                        'Customer remove kare?'
-                                    )
-                                "
-                            >
-
-                                <input
-                                    type="hidden"
-                                    name="action"
-                                    value="delete"
+                                <form
+                                    method="post"
+                                    style="display:inline"
+                                    onsubmit="return confirm('Customer remove kare?')"
                                 >
 
-                                <input
-                                    type="hidden"
-                                    name="customer_id"
-                                    value="{r['id']}"
-                                >
+                                    <input
+                                        type="hidden"
+                                        name="action"
+                                        value="delete"
+                                    >
 
-                                <button
-                                    class="red small"
-                                    type="submit"
-                                >
-                                    DELETE
-                                </button>
+                                    <input
+                                        type="hidden"
+                                        name="customer_id"
+                                        value="{r['id']}"
+                                    >
 
-                            </form>
+                                    <button
+                                        class="red small"
+                                        type="submit"
+                                    >
+                                        Delete
+                                    </button>
 
-                        </div>
+                                </form>
 
-                    </td>
+                            </div>
 
-                </tr>
+                        </td>
 
-        """
-
-    if not rows:
-
-        body += """
-
-                <tr>
-
-                    <td
-                        colspan="7"
-                        class="muted"
-                    >
-                        Abhi koi customer nahi hai.
-                    </td>
-
-                </tr>
+                    </tr>
 
         """
 
     body += """
+
+                </tbody>
 
             </table>
 
@@ -1850,8 +1420,197 @@ def customers():
 
     """
 
+    return page("Customers", body)
+
+
+# ============================================================
+# CUSTOMER SEARCH
+# ============================================================
+
+@app.route("/search")
+@login_required
+def search():
+
+    q = request.args.get(
+        "q",
+        ""
+    ).strip()
+
+    con = db()
+
+    if q:
+
+        customers_rows = con.execute("""
+            SELECT *
+            FROM customers
+            WHERE active=1
+            AND (
+                name LIKE ?
+                OR mobile LIKE ?
+                OR phone LIKE ?
+                OR address LIKE ?
+            )
+            ORDER BY name
+        """, (
+            f"%{q}%",
+            f"%{q}%",
+            f"%{q}%",
+            f"%{q}%"
+        )).fetchall()
+
+    else:
+
+        customers_rows = []
+
+    con.close()
+
+    body = f"""
+
+    <div class="panel">
+
+        <h2>🔎 Customer Search</h2>
+
+        <form method="get">
+
+            <div class="toolbar">
+
+                <div class="field">
+
+                    <label>
+                        Customer Name / Mobile
+                    </label>
+
+                    <input
+                        type="text"
+                        name="q"
+                        value="{esc(q)}"
+                        placeholder="Search customer..."
+                        autofocus
+                    >
+
+                </div>
+
+                <button
+                    type="submit"
+                    class="blue"
+                >
+                    🔍 Search
+                </button>
+
+                <a
+                    href="{url_for('search')}"
+                    class="btn gray"
+                >
+                    Clear
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
+
+    """
+
+    if q:
+
+        body += """
+
+        <div class="panel">
+
+            <h3>Search Results</h3>
+
+            <div class="table">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Mobile</th>
+                            <th>Address</th>
+                            <th>Action</th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+        """
+
+        if customers_rows:
+
+            for c in customers_rows:
+
+                body += f"""
+
+                        <tr>
+
+                            <td>{c["id"]}</td>
+
+                            <td>
+                                <b>{esc(c["name"])}</b>
+                            </td>
+
+                            <td>
+                                {esc(c["mobile"] or c["phone"])}
+                            </td>
+
+                            <td>
+                                {esc(c["address"])}
+                            </td>
+
+                            <td>
+
+                                <a
+                                    class="btn small"
+                                    href="{url_for(
+                                        'ledger',
+                                        customer_id=c['id']
+                                    )}"
+                                >
+                                    📒 Ledger
+                                </a>
+
+                            </td>
+
+                        </tr>
+
+                """
+
+        else:
+
+            body += """
+
+                        <tr>
+
+                            <td
+                                colspan="5"
+                                class="muted"
+                            >
+                                Customer nahi mila.
+                            </td>
+
+                        </tr>
+
+            """
+
+        body += """
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+        """
+
     return page(
-        "Customers",
+        "Customer Search",
         body
     )
 
@@ -1860,10 +1619,7 @@ def customers():
 # JOBS
 # ============================================================
 
-@app.route(
-    "/jobs",
-    methods=["GET", "POST"]
-)
+@app.route("/jobs", methods=["GET", "POST"])
 @login_required
 def jobs():
 
@@ -1874,21 +1630,24 @@ def jobs():
         type=int
     )
 
+    edit_job = None
+
+    if edit_id:
+
+        edit_job = con.execute("""
+            SELECT *
+            FROM jobs
+            WHERE id=?
+        """, (edit_id,)).fetchone()
+
     if request.method == "POST":
 
         try:
 
-            action = request.form.get(
-                "action",
-                "save"
-            )
-
-            customer_id = int(
-                request.form.get(
-                    "customer_id",
-                    "0"
-                )
-            )
+            customer_id = request.form.get(
+                "customer_id",
+                ""
+            ).strip()
 
             date_value = request.form.get(
                 "date",
@@ -1900,7 +1659,7 @@ def jobs():
                 ""
             ).strip()
 
-            work = request.form.get(
+            work_type = request.form.get(
                 "work",
                 "Other"
             ).strip()
@@ -1932,15 +1691,28 @@ def jobs():
                 "loss"
             )
 
-            quantity = parse_int(
-                "quantity",
-                1
+            # AUTOMATIC CALCULATION
+            total_weight = (
+                gross_weight +
+                nag_weight
             )
+
+            net_weight = (
+                total_weight -
+                loss
+            )
+
+            stone_weight = nag_weight
 
             taanch = request.form.get(
                 "taanch",
                 ""
             ).strip()
+
+            quantity = parse_int(
+                "quantity",
+                1
+            )
 
             work_amount = parse_float(
                 "work_amount"
@@ -1951,112 +1723,111 @@ def jobs():
                 ""
             ).strip()
 
-            if customer_id <= 0:
-
+            if not customer_id:
                 raise ValueError(
                     "Customer select karo."
                 )
 
             if not date_value:
-
-                raise ValueError(
-                    "Date zaroori hai."
+                date_value = datetime.now().strftime(
+                    "%Y-%m-%d"
                 )
 
             if not jewellery:
-
                 raise ValueError(
                     "Jewellery name zaroori hai."
                 )
 
-            if quantity < 1:
-
+            if gross_weight < 0:
                 raise ValueError(
-                    "नग कम से कम 1 hona chahiye."
+                    "वजन negative nahi ho sakta."
                 )
 
-            # =================================================
-            # AUTOMATIC WEIGHT CALCULATION
-            #
-            # वजन + नग वजन = कुल वजन
-            # कुल वजन - लॉस = अंतिम वजन
-            # =================================================
+            if nag_weight < 0:
+                raise ValueError(
+                    "नग वजन negative nahi ho sakta."
+                )
 
-            total_weight = (
-                gross_weight
-                +
-                nag_weight
-            )
+            if loss < 0:
+                raise ValueError(
+                    "लॉस negative nahi ho sakta."
+                )
 
-            final_weight = (
-                total_weight
-                -
-                loss
-            )
-
-            if final_weight < 0:
-
+            if net_weight < 0:
                 raise ValueError(
                     "अंतिम वजन negative nahi ho sakta."
                 )
 
-            if action == "update":
-
-                job_id = int(
-                    request.form.get(
-                        "job_id",
-                        "0"
-                    )
+            if quantity < 1:
+                raise ValueError(
+                    "नग kam se kam 1 hona chahiye."
                 )
 
-                con.execute(
-                    """
-                    UPDATE jobs
+            if work_amount < 0:
+                raise ValueError(
+                    "Amount negative nahi ho sakta."
+                )
 
+            customer = con.execute("""
+                SELECT name
+                FROM customers
+                WHERE id=?
+            """, (customer_id,)).fetchone()
+
+            if not customer:
+                raise ValueError(
+                    "Customer nahi mila."
+                )
+
+            data = (
+                customer_id,
+                customer["name"],
+                date_value,
+                jewellery,
+                work_type,
+                status,
+                maal_aaya,
+                maal_diyaa,
+                gross_weight,
+                nag_weight,
+                stone_weight,
+                total_weight,
+                loss,
+                net_weight,
+                net_weight,
+                taanch,
+                quantity,
+                work_amount,
+                notes
+            )
+
+            if edit_id:
+
+                con.execute("""
+                    UPDATE jobs
                     SET
                         customer_id=?,
+                        customer=?,
                         date=?,
                         jewellery=?,
+                        job_type=?,
                         work=?,
                         status=?,
                         maal_aaya=?,
                         maal_diyaa=?,
                         gross_weight=?,
                         nag_weight=?,
+                        stone_weight=?,
                         total_weight=?,
                         loss=?,
                         final_weight=?,
-                        stone_weight=?,
                         net_weight=?,
-                        quantity=?,
                         taanch=?,
+                        quantity=?,
                         work_amount=?,
                         notes=?
-
                     WHERE id=?
-                    """,
-                    (
-                        customer_id,
-                        date_value,
-                        jewellery,
-                        work,
-                        status,
-                        maal_aaya,
-                        maal_diyaa,
-                        gross_weight,
-                        nag_weight,
-                        total_weight,
-                        loss,
-                        final_weight,
-                        nag_weight,
-                        final_weight,
-                        quantity,
-                        taanch,
-                        work_amount,
-                        notes,
-                        job_id
-                    )
-                )
+                """, data + (edit_id,))
 
                 message = (
                     "Job entry update ho gayi."
@@ -2064,80 +1835,41 @@ def jobs():
 
             else:
 
-                con.execute(
-                    """
+                con.execute("""
                     INSERT INTO jobs
                     (
                         customer_id,
+                        customer,
                         date,
                         jewellery,
+                        job_type,
                         work,
                         status,
                         maal_aaya,
                         maal_diyaa,
                         gross_weight,
                         nag_weight,
-                        total_weight,
-                        loss,
-                        final_weight,
                         stone_weight,
-                        net_weight,
-                        quantity,
-                        taanch,
-                        work_amount,
-                        notes
-                    )
-
-                    VALUES
-                    (
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?
-                    )
-                    """,
-                    (
-                        customer_id,
-                        date_value,
-                        jewellery,
-                        work,
-                        status,
-                        maal_aaya,
-                        maal_diyaa,
-                        gross_weight,
-                        nag_weight,
                         total_weight,
                         loss,
                         final_weight,
-                        nag_weight,
-                        final_weight,
-                        quantity,
+                        net_weight,
                         taanch,
+                        quantity,
                         work_amount,
                         notes
                     )
-                )
+                    VALUES(
+                        ?,?,?,?,?,?,?,?,?,?,
+                        ?,?,?,?,?,?,?,?,?,?
+                    )
+                """, data)
 
                 message = (
                     "Job entry save ho gayi."
                 )
 
             con.commit()
-
             con.close()
 
             flash(
@@ -2158,78 +1890,46 @@ def jobs():
                 "error"
             )
 
-    # ========================================================
-    # CUSTOMER LIST
-    # ========================================================
-
-    customers_rows = con.execute(
-        """
+    customers_rows = con.execute("""
         SELECT id,name
         FROM customers
         WHERE active=1
         ORDER BY name
-        """
-    ).fetchall()
+    """).fetchall()
 
-    # ========================================================
-    # EDIT JOB
-    # ========================================================
-
-    edit_job = None
-
-    if edit_id:
-
-        edit_job = con.execute(
-            """
-            SELECT *
-            FROM jobs
-            WHERE id=?
-            """,
-            (edit_id,)
-        ).fetchone()
-
-    # ========================================================
-    # JOB LIST
-    # ========================================================
-
-    jobs_rows = con.execute(
-        """
+    rows = con.execute("""
         SELECT
             j.*,
-            c.name AS customer_name
-
+            COALESCE(
+                c.name,
+                j.customer,
+                ''
+            ) AS customer_name
         FROM jobs j
-
-        JOIN customers c
+        LEFT JOIN customers c
             ON c.id=j.customer_id
-
         ORDER BY
             j.date DESC,
             j.id DESC
-        """
-    ).fetchall()
+    """).fetchall()
 
     con.close()
-
-    # ========================================================
-    # FORM DEFAULTS
-    # ========================================================
 
     if edit_job:
 
         selected_customer = str(
-            edit_job["customer_id"]
+            edit_job["customer_id"] or ""
         )
 
-        form_date = edit_job["date"]
+        form_date = edit_job["date"] or ""
 
         form_jewellery = (
-            edit_job["jewellery"]
-            or ""
+            edit_job["jewellery"] or ""
         )
 
         form_work = (
             edit_job["work"]
+            or edit_job["job_type"]
             or "Other"
         )
 
@@ -2239,111 +1939,67 @@ def jobs():
         )
 
         form_maal_aaya = (
-            edit_job["maal_aaya"]
-            or ""
+            edit_job["maal_aaya"] or ""
         )
 
         form_maal_diyaa = (
-            edit_job["maal_diyaa"]
-            or ""
+            edit_job["maal_diyaa"] or ""
         )
 
         form_gross = (
-            edit_job["gross_weight"]
-            or 0
+            edit_job["gross_weight"] or 0
         )
 
         form_nag = (
             edit_job["nag_weight"]
-            or edit_job["stone_weight"]
-            or 0
+            if edit_job["nag_weight"] is not None
+            else edit_job["stone_weight"] or 0
         )
 
         form_loss = (
-            edit_job["loss"]
-            or 0
+            edit_job["loss"] or 0
         )
 
         form_taanch = (
-            edit_job["taanch"]
-            or ""
+            edit_job["taanch"] or ""
         )
 
         form_quantity = (
-            edit_job["quantity"]
-            or 1
+            edit_job["quantity"] or 1
         )
 
         form_amount = (
-            edit_job["work_amount"]
-            or 0
+            edit_job["work_amount"] or 0
         )
 
         form_notes = (
-            edit_job["notes"]
-            or ""
+            edit_job["notes"] or ""
         )
 
-        heading = "✏️ EDIT JOB"
-
+        heading = "✏️ Edit Job Entry"
         button_text = "UPDATE JOB"
-
-        action_value = "update"
-
-        job_id_html = f"""
-        <input
-            type="hidden"
-            name="job_id"
-            value="{edit_id}"
-        >
-        """
 
     else:
 
-        selected_customer = request.args.get(
-            "customer_id",
-            ""
-        )
-
+        selected_customer = ""
         form_date = datetime.now().strftime(
             "%Y-%m-%d"
         )
-
         form_jewellery = ""
-
         form_work = "Nag Setting"
-
         form_status = "Pending"
-
         form_maal_aaya = ""
-
         form_maal_diyaa = ""
-
         form_gross = 0
-
         form_nag = 0
-
         form_loss = 0
-
         form_taanch = ""
-
         form_quantity = 1
-
         form_amount = 0
-
         form_notes = ""
 
-        heading = "➕ NEW JOB ENTRY"
-
+        heading = "➕ New Job Entry"
         button_text = "SAVE JOB"
-
-        action_value = "save"
-
-        job_id_html = ""
-
-    # ========================================================
-    # CUSTOMER OPTIONS
-    # ========================================================
 
     customer_options = ""
 
@@ -2351,9 +2007,8 @@ def jobs():
 
         selected = (
             "selected"
-            if str(c["id"])
-            ==
-            str(selected_customer)
+            if selected_customer ==
+            str(c["id"])
             else ""
         )
 
@@ -2366,35 +2021,18 @@ def jobs():
         </option>
         """
 
-    # ========================================================
-    # JOB FORM
-    # ========================================================
-
     body = f"""
 
-    <h2>
-        {heading}
-    </h2>
+    <h2>{heading}</h2>
 
     <div class="panel">
 
         <form method="post">
 
-            <input
-                type="hidden"
-                name="action"
-                value="{action_value}"
-            >
-
-            {job_id_html}
-
             <div class="form">
 
                 <div>
-
-                    <label>
-                        Customer
-                    </label>
+                    <label>Customer</label>
 
                     <select
                         name="customer_id"
@@ -2408,15 +2046,11 @@ def jobs():
                         {customer_options}
 
                     </select>
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        Date
-                    </label>
+                    <label>Date</label>
 
                     <input
                         type="date"
@@ -2424,15 +2058,11 @@ def jobs():
                         value="{esc(form_date)}"
                         required
                     >
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        Jewellery
-                    </label>
+                    <label>Jewellery</label>
 
                     <input
                         name="jewellery"
@@ -2440,15 +2070,11 @@ def jobs():
                         placeholder="Ring / Chain / Pendant"
                         required
                     >
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        Work
-                    </label>
+                    <label>Work</label>
 
                     <select name="work">
 
@@ -2481,56 +2107,44 @@ def jobs():
                         </option>
 
                     </select>
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        Status
-                    </label>
+                    <label>Status</label>
 
                     <select name="status">
 
                         <option
-                            value="Pending"
                             {"selected" if form_status == "Pending" else ""}
                         >
                             Pending
                         </option>
 
                         <option
-                            value="In Progress"
                             {"selected" if form_status == "In Progress" else ""}
                         >
                             In Progress
                         </option>
 
                         <option
-                            value="Ready"
                             {"selected" if form_status == "Ready" else ""}
                         >
                             Ready
                         </option>
 
                         <option
-                            value="Delivered"
                             {"selected" if form_status == "Delivered" else ""}
                         >
                             Delivered
                         </option>
 
                     </select>
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        नग
-                    </label>
+                    <label>नग</label>
 
                     <input
                         type="number"
@@ -2538,45 +2152,31 @@ def jobs():
                         min="1"
                         value="{form_quantity}"
                     >
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        माल आया
-                    </label>
+                    <label>माल आया</label>
 
                     <input
                         name="maal_aaya"
                         value="{esc(form_maal_aaya)}"
-                        placeholder="माल आया"
                     >
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        माल गया
-                    </label>
+                    <label>माल गया</label>
 
                     <input
                         name="maal_diyaa"
                         value="{esc(form_maal_diyaa)}"
-                        placeholder="माल गया"
                     >
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        काम की रकम
-                    </label>
+                    <label>काम की रकम</label>
 
                     <input
                         type="number"
@@ -2585,7 +2185,6 @@ def jobs():
                         name="work_amount"
                         value="{form_amount}"
                     >
-
                 </div>
 
             </div>
@@ -2594,18 +2193,12 @@ def jobs():
             <hr>
 
 
-            <h3>
-                ⚖️ वजन विवरण
-            </h3>
-
+            <h3>⚖️ वजन विवरण</h3>
 
             <div class="form">
 
                 <div>
-
-                    <label>
-                        वजन
-                    </label>
+                    <label>वजन</label>
 
                     <input
                         type="number"
@@ -2616,15 +2209,11 @@ def jobs():
                         value="{form_gross}"
                         oninput="calculateWeight()"
                     >
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        + नग वजन
-                    </label>
+                    <label>+नग वजन</label>
 
                     <input
                         type="number"
@@ -2635,15 +2224,11 @@ def jobs():
                         value="{form_nag}"
                         oninput="calculateWeight()"
                     >
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        = कुल वजन
-                    </label>
+                    <label>=कुल वजन</label>
 
                     <input
                         type="number"
@@ -2652,15 +2237,11 @@ def jobs():
                         value="0"
                         readonly
                     >
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        - लॉस
-                    </label>
+                    <label>-लॉस</label>
 
                     <input
                         type="number"
@@ -2671,39 +2252,30 @@ def jobs():
                         value="{form_loss}"
                         oninput="calculateWeight()"
                     >
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        = अंतिम वजन
-                    </label>
+                    <label>=अंतिम वजन</label>
 
                     <input
                         type="number"
                         step="0.001"
-                        id="final_weight"
+                        id="net_weight"
                         value="0"
                         readonly
                     >
-
                 </div>
 
 
                 <div>
-
-                    <label>
-                        ताँच
-                    </label>
+                    <label>ताँच</label>
 
                     <input
                         name="taanch"
                         value="{esc(form_taanch)}"
                         placeholder="ताँच"
                     >
-
                 </div>
 
             </div>
@@ -2712,17 +2284,17 @@ def jobs():
             <br>
 
 
-            <label>
-                Notes
-            </label>
+            <div>
+                <label>Notes</label>
 
-            <textarea
-                name="notes"
-                placeholder="Extra notes..."
-            >{esc(form_notes)}</textarea>
+                <textarea
+                    name="notes"
+                    placeholder="Extra notes..."
+                >{esc(form_notes)}</textarea>
+            </div>
 
 
-            <br><br>
+            <br>
 
 
             <button
@@ -2732,8 +2304,12 @@ def jobs():
                 💾 {button_text}
             </button>
 
-
-            {"<a class='btn gray' href='" + url_for("jobs") + "'>CANCEL</a>" if edit_job else ""}
+            <a
+                class="btn gray"
+                href="{url_for('jobs')}"
+            >
+                CANCEL
+            </a>
 
         </form>
 
@@ -2742,210 +2318,169 @@ def jobs():
 
     <div class="panel">
 
-        <h3>
-            📋 JOB RECORDS
-        </h3>
+        <h3>📋 Job Records</h3>
 
         <div class="table">
 
             <table>
 
-                <tr>
+                <thead>
 
-                    <th>
-                        ID
-                    </th>
+                    <tr>
+                        <th>ID</th>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Jewellery</th>
+                        <th>Work</th>
+                        <th>Weight</th>
+                        <th>ताँच</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
 
-                    <th>
-                        Date
-                    </th>
+                </thead>
 
-                    <th>
-                        Customer
-                    </th>
-
-                    <th>
-                        Jewellery
-                    </th>
-
-                    <th>
-                        Work
-                    </th>
-
-                    <th>
-                        वजन
-                    </th>
-
-                    <th>
-                        नग वजन
-                    </th>
-
-                    <th>
-                        कुल वजन
-                    </th>
-
-                    <th>
-                        लॉस
-                    </th>
-
-                    <th>
-                        अंतिम वजन
-                    </th>
-
-                    <th>
-                        ताँच
-                    </th>
-
-                    <th>
-                        Status
-                    </th>
-
-                    <th>
-                        Amount
-                    </th>
-
-                    <th>
-                        Action
-                    </th>
-
-                </tr>
+                <tbody>
 
     """
 
-    # ========================================================
-    # JOB ROWS
-    # ========================================================
+    for r in rows:
 
-    for r in jobs_rows:
+        gross = float(
+            r["gross_weight"] or 0
+        )
+
+        nag = float(
+            r["nag_weight"]
+            if r["nag_weight"] is not None
+            else r["stone_weight"] or 0
+        )
+
+        total = float(
+            r["total_weight"]
+            if r["total_weight"] is not None
+            else gross + nag
+        )
+
+        loss = float(
+            r["loss"] or 0
+        )
+
+        net = float(
+            r["net_weight"]
+            if r["net_weight"] is not None
+            else total - loss
+        )
 
         body += f"""
 
-                <tr>
+                    <tr>
 
-                    <td>
-                        {r["id"]}
-                    </td>
+                        <td>{r["id"]}</td>
 
-                    <td>
-                        {esc(r["date"])}
-                    </td>
+                        <td>
+                            {esc(r["date"])}
+                        </td>
 
-                    <td>
-                        <b>
-                            {esc(r["customer_name"])}
-                        </b>
-                    </td>
+                        <td>
+                            <b>
+                                {esc(r["customer_name"])}
+                            </b>
+                        </td>
 
-                    <td>
-                        {esc(r["jewellery"])}
-                    </td>
+                        <td>
+                            {esc(r["jewellery"])}
+                        </td>
 
-                    <td>
-                        {esc(r["work"])}
-                    </td>
+                        <td>
+                            {esc(
+                                r["work"]
+                                or r["job_type"]
+                            )}
+                        </td>
 
-                    <td>
-                        {float(r["gross_weight"] or 0):.3f} g
-                    </td>
+                        <td>
+                            वजन:
+                            {gross:.3f} g
+                            <br>
 
-                    <td>
-                        {float(r["nag_weight"] or 0):.3f} g
-                    </td>
+                            +नग वजन:
+                            {nag:.3f} g
+                            <br>
 
-                    <td>
-                        {float(r["total_weight"] or 0):.3f} g
-                    </td>
+                            =कुल वजन:
+                            {total:.3f} g
+                            <br>
 
-                    <td>
-                        {float(r["loss"] or 0):.3f} g
-                    </td>
+                            -लॉस:
+                            {loss:.3f} g
+                            <br>
 
-                    <td>
-                        <b>
-                            {float(r["final_weight"] or r["net_weight"] or 0):.3f}
-                            g
-                        </b>
-                    </td>
+                            =अंतिम वजन:
+                            {net:.3f} g
+                        </td>
 
-                    <td>
-                        {esc(r["taanch"])}
-                    </td>
+                        <td>
+                            {esc(r["taanch"])}
+                            <br>
+                            नग: {r["quantity"] or 1}
+                        </td>
 
-                    <td>
+                        <td>
+                            {money(r["work_amount"])}
+                        </td>
 
-                        <span class="badge yellow">
-                            {esc(r["status"])}
-                        </span>
+                        <td>
+                            <span class="badge yellow">
+                                {esc(r["status"])}
+                            </span>
+                        </td>
 
-                    </td>
+                        <td>
 
-                    <td>
-                        {money(r["work_amount"])}
-                    </td>
+                            <div class="actions">
 
-                    <td>
-
-                        <div class="actions">
-
-                            <a
-                                class="btn small blue"
-                                href="{url_for(
-                                    'jobs',
-                                    edit=r['id']
-                                )}"
-                            >
-                                ✏️ EDIT
-                            </a>
-
-                            <form
-                                method="post"
-                                action="{url_for(
-                                    'delete_job',
-                                    job_id=r['id']
-                                )}"
-                                style="display:inline"
-                                onsubmit="
-                                    return confirm(
-                                        'Job delete kare?'
-                                    )
-                                "
-                            >
-
-                                <button
-                                    class="red small"
-                                    type="submit"
+                                <a
+                                    class="btn small"
+                                    href="{url_for(
+                                        'jobs',
+                                        edit=r['id']
+                                    )}"
                                 >
-                                    🗑 DELETE
-                                </button>
+                                    EDIT
+                                </a>
 
-                            </form>
+                                <form
+                                    method="post"
+                                    action="{url_for(
+                                        'delete_job',
+                                        job_id=r['id']
+                                    )}"
+                                    style="display:inline"
+                                    onsubmit="return confirm('Delete job?')"
+                                >
 
-                        </div>
+                                    <button
+                                        class="red small"
+                                        type="submit"
+                                    >
+                                        DELETE
+                                    </button>
 
-                    </td>
+                                </form>
 
-                </tr>
+                            </div>
 
-        """
+                        </td>
 
-    if not jobs_rows:
-
-        body += """
-
-                <tr>
-
-                    <td
-                        colspan="14"
-                        class="muted"
-                    >
-                        Abhi koi job entry nahi hai.
-                    </td>
-
-                </tr>
+                    </tr>
 
         """
 
     body += """
+
+                </tbody>
 
             </table>
 
@@ -2991,22 +2526,18 @@ def jobs():
             total.toFixed(3);
 
         document.getElementById(
-            "final_weight"
+            "net_weight"
         ).value =
             Math.max(
                 0,
                 finalWeight
             ).toFixed(3);
-
     }
-
 
     document.addEventListener(
         "DOMContentLoaded",
         function(){
-
             calculateWeight();
-
         }
     );
 
@@ -3024,24 +2555,18 @@ def jobs():
 # DELETE JOB
 # ============================================================
 
-@app.post(
-    "/job/delete/<int:job_id>"
-)
+@app.post("/job/delete/<int:job_id>")
 @login_required
 def delete_job(job_id):
 
     con = db()
 
     con.execute(
-        """
-        DELETE FROM jobs
-        WHERE id=?
-        """,
+        "DELETE FROM jobs WHERE id=?",
         (job_id,)
     )
 
     con.commit()
-
     con.close()
 
     flash(
@@ -3055,13 +2580,67 @@ def delete_job(job_id):
 
 
 # ============================================================
+# TOGGLE CUSTOMER
+# ============================================================
+
+@app.post("/customers/toggle/<int:cid>")
+@login_required
+def toggle_customer(cid):
+
+    con = db()
+
+    c = con.execute("""
+        SELECT active
+        FROM customers
+        WHERE id=?
+    """, (cid,)).fetchone()
+
+    if not c:
+
+        con.close()
+
+        flash(
+            "Customer nahi mila.",
+            "error"
+        )
+
+        return redirect(
+            url_for("customers")
+        )
+
+    new_status = (
+        0
+        if c["active"]
+        else 1
+    )
+
+    con.execute("""
+        UPDATE customers
+        SET active=?
+        WHERE id=?
+    """, (
+        new_status,
+        cid
+    ))
+
+    con.commit()
+    con.close()
+
+    flash(
+        "Customer status update ho gaya.",
+        "success"
+    )
+
+    return redirect(
+        url_for("customers")
+    )
+
+
+# ============================================================
 # PAYMENTS
 # ============================================================
 
-@app.route(
-    "/payments",
-    methods=["GET", "POST"]
-)
+@app.route("/payments", methods=["GET", "POST"])
 @login_required
 def payments():
 
@@ -3097,26 +2676,28 @@ def payments():
                 ""
             ).strip()
 
-            if customer_id <= 0:
-
-                raise ValueError(
-                    "Customer select karo."
-                )
-
-            if not date_value:
-
-                raise ValueError(
-                    "Date zaroori hai."
-                )
-
             if amount <= 0:
-
                 raise ValueError(
                     "Payment amount 0 se zyada hona chahiye."
                 )
 
-            con.execute(
-                """
+            if not date_value:
+                date_value = datetime.now().strftime(
+                    "%Y-%m-%d"
+                )
+
+            customer = con.execute("""
+                SELECT id
+                FROM customers
+                WHERE id=?
+            """, (customer_id,)).fetchone()
+
+            if not customer:
+                raise ValueError(
+                    "Customer select karo."
+                )
+
+            con.execute("""
                 INSERT INTO payments
                 (
                     customer_id,
@@ -3126,20 +2707,18 @@ def payments():
                     note
                 )
                 VALUES(?,?,?,?,?)
-                """,
-                (
-                    customer_id,
-                    date_value,
-                    amount,
-                    mode,
-                    note
-                )
-            )
+            """, (
+                customer_id,
+                date_value,
+                amount,
+                mode,
+                note
+            ))
 
             con.commit()
 
             flash(
-                "Payment save ho gaya.",
+                "Payment successfully save ho gaya.",
                 "success"
             )
 
@@ -3152,39 +2731,30 @@ def payments():
                 "error"
             )
 
-        finally:
-
-            con.close()
+        con.close()
 
         return redirect(
             url_for("payments")
         )
 
-    customers_rows = con.execute(
-        """
+    customers_rows = con.execute("""
         SELECT id,name
         FROM customers
         WHERE active=1
         ORDER BY name
-        """
-    ).fetchall()
+    """).fetchall()
 
-    payments_rows = con.execute(
-        """
+    payments_rows = con.execute("""
         SELECT
             p.*,
             c.name AS customer_name
-
         FROM payments p
-
         JOIN customers c
             ON c.id=p.customer_id
-
         ORDER BY
             p.date DESC,
             p.id DESC
-        """
-    ).fetchall()
+    """).fetchall()
 
     con.close()
 
@@ -3192,27 +2762,11 @@ def payments():
         "%Y-%m-%d"
     )
 
-    customer_options = ""
-
-    for c in customers_rows:
-
-        customer_options += f"""
-        <option value="{c['id']}">
-            {esc(c['name'])}
-        </option>
-        """
-
     body = f"""
 
-    <h2>
-        💰 Payment Entry
-    </h2>
+    <h2>💰 Payment Entry</h2>
 
     <div class="panel">
-
-        <h3>
-            ➕ New Payment
-        </h3>
 
         <form method="post">
 
@@ -3220,9 +2774,7 @@ def payments():
 
                 <div>
 
-                    <label>
-                        Customer
-                    </label>
+                    <label>Customer</label>
 
                     <select
                         name="customer_id"
@@ -3232,8 +2784,17 @@ def payments():
                         <option value="">
                             Select Customer
                         </option>
+    """
 
-                        {customer_options}
+    for c in customers_rows:
+
+        body += f"""
+                        <option value="{c["id"]}">
+                            {esc(c["name"])}
+                        </option>
+        """
+
+    body += f"""
 
                     </select>
 
@@ -3242,9 +2803,7 @@ def payments():
 
                 <div>
 
-                    <label>
-                        Date
-                    </label>
+                    <label>Date</label>
 
                     <input
                         type="date"
@@ -3258,15 +2817,14 @@ def payments():
 
                 <div>
 
-                    <label>
-                        Amount
-                    </label>
+                    <label>Amount</label>
 
                     <input
                         type="number"
+                        name="amount"
                         step="0.01"
                         min="0"
-                        name="amount"
+                        value="0"
                         required
                     >
 
@@ -3275,27 +2833,14 @@ def payments():
 
                 <div>
 
-                    <label>
-                        Mode
-                    </label>
+                    <label>Payment Mode</label>
 
                     <select name="mode">
 
-                        <option>
-                            Cash
-                        </option>
-
-                        <option>
-                            UPI
-                        </option>
-
-                        <option>
-                            Bank
-                        </option>
-
-                        <option>
-                            Other
-                        </option>
+                        <option>Cash</option>
+                        <option>UPI</option>
+                        <option>Bank</option>
+                        <option>Other</option>
 
                     </select>
 
@@ -3304,9 +2849,7 @@ def payments():
 
                 <div>
 
-                    <label>
-                        Note
-                    </label>
+                    <label>Note</label>
 
                     <input
                         name="note"
@@ -3320,10 +2863,10 @@ def payments():
             <br>
 
             <button
-                class="green"
                 type="submit"
+                class="green"
             >
-                💾 SAVE PAYMENT
+                💾 Save Payment
             </button>
 
         </form>
@@ -3333,37 +2876,25 @@ def payments():
 
     <div class="panel">
 
-        <h3>
-            📋 Payment Records
-        </h3>
+        <h3>📋 Payment Records</h3>
 
         <div class="table">
 
             <table>
 
-                <tr>
+                <thead>
 
-                    <th>
-                        Date
-                    </th>
+                    <tr>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Amount</th>
+                        <th>Mode</th>
+                        <th>Note</th>
+                    </tr>
 
-                    <th>
-                        Customer
-                    </th>
+                </thead>
 
-                    <th>
-                        Amount
-                    </th>
-
-                    <th>
-                        Mode
-                    </th>
-
-                    <th>
-                        Note
-                    </th>
-
-                </tr>
+                <tbody>
 
     """
 
@@ -3371,52 +2902,35 @@ def payments():
 
         body += f"""
 
-                <tr>
+                    <tr>
 
-                    <td>
-                        {esc(p["date"])}
-                    </td>
+                        <td>
+                            {esc(p["date"])}
+                        </td>
 
-                    <td>
-                        <b>
+                        <td>
                             {esc(p["customer_name"])}
-                        </b>
-                    </td>
+                        </td>
 
-                    <td class="credit">
-                        {money(p["amount"])}
-                    </td>
+                        <td class="credit">
+                            {money(p["amount"])}
+                        </td>
 
-                    <td>
-                        {esc(p["mode"])}
-                    </td>
+                        <td>
+                            {esc(p["mode"])}
+                        </td>
 
-                    <td>
-                        {esc(p["note"])}
-                    </td>
+                        <td>
+                            {esc(p["note"])}
+                        </td>
 
-                </tr>
-
-        """
-
-    if not payments_rows:
-
-        body += """
-
-                <tr>
-
-                    <td
-                        colspan="5"
-                        class="muted"
-                    >
-                        Abhi koi payment nahi hai.
-                    </td>
-
-                </tr>
+                    </tr>
 
         """
 
     body += """
+
+                </tbody>
 
             </table>
 
@@ -3447,107 +2961,27 @@ def ledger():
 
     con = db()
 
-    customers_rows = con.execute(
-        """
+    customers_rows = con.execute("""
         SELECT id,name
         FROM customers
-        WHERE active=1
         ORDER BY name
-        """
-    ).fetchall()
+    """).fetchall()
 
-    selected_customer = None
+    if not customer_id:
 
-    jobs_rows = []
+        con.close()
 
-    payment_rows = []
+        body = """
 
-    if customer_id:
+        <div class="panel">
 
-        selected_customer = con.execute(
-            """
-            SELECT *
-            FROM customers
-            WHERE id=?
-            """,
-            (customer_id,)
-        ).fetchone()
+            <h2>📒 Customer Ledger</h2>
 
-        jobs_rows = con.execute(
-            """
-            SELECT *
-            FROM jobs
-            WHERE customer_id=?
-            ORDER BY date,id
-            """,
-            (customer_id,)
-        ).fetchall()
+            <p>
+                Ledger dekhne ke liye customer select karo.
+            </p>
 
-        payment_rows = con.execute(
-            """
-            SELECT *
-            FROM payments
-            WHERE customer_id=?
-            ORDER BY date,id
-            """,
-            (customer_id,)
-        ).fetchall()
-
-    con.close()
-
-    total_work = sum(
-        float(j["work_amount"] or 0)
-        for j in jobs_rows
-    )
-
-    total_paid = sum(
-        float(p["amount"] or 0)
-        for p in payment_rows
-    )
-
-    balance = (
-        total_work
-        -
-        total_paid
-    )
-
-    options = ""
-
-    for c in customers_rows:
-
-        selected = (
-            "selected"
-            if customer_id == c["id"]
-            else ""
-        )
-
-        options += f"""
-        <option
-            value="{c['id']}"
-            {selected}
-        >
-            {esc(c['name'])}
-        </option>
-        """
-
-    body = f"""
-
-    <h2>
-        📒 Customer Ledger
-    </h2>
-
-    <div class="panel">
-
-        <form
-            method="get"
-            class="toolbar"
-        >
-
-            <div class="field">
-
-                <label>
-                    Customer
-                </label>
+            <form method="get">
 
                 <select
                     name="customer_id"
@@ -3558,128 +2992,186 @@ def ledger():
                         Select Customer
                     </option>
 
-                    {options}
+        """
+
+        for c in customers_rows:
+
+            body += f"""
+                    <option value="{c["id"]}">
+                        {esc(c["name"])}
+                    </option>
+            """
+
+        body += """
 
                 </select>
 
-            </div>
+                <br><br>
 
-            <button
-                class="blue"
-                type="submit"
-            >
-                📒 SHOW LEDGER
-            </button>
+                <button
+                    class="blue"
+                    type="submit"
+                >
+                    📒 Open Ledger
+                </button>
 
-        </form>
-
-    </div>
-
-    """
-
-    if selected_customer:
-
-        body += f"""
-
-        <div class="cardbox">
-
-            <div class="card">
-
-                <h3>
-                    Customer
-                </h3>
-
-                <div class="stat">
-                    {esc(selected_customer["name"])}
-                </div>
-
-            </div>
-
-
-            <div class="card">
-
-                <h3>
-                    Total Kaam
-                </h3>
-
-                <div class="stat">
-                    {money(total_work)}
-                </div>
-
-            </div>
-
-
-            <div class="card">
-
-                <h3>
-                    Total Paid
-                </h3>
-
-                <div class="stat credit">
-                    {money(total_paid)}
-                </div>
-
-            </div>
-
-
-            <div class="card">
-
-                <h3>
-                    Baaki
-                </h3>
-
-                <div class="stat debit">
-                    {money(balance)}
-                </div>
-
-            </div>
+            </form>
 
         </div>
 
-
-        <div class="panel">
-
-            <h3>
-                💍 Job Entries
-            </h3>
-
-            <div class="table">
-
-                <table>
-
-                    <tr>
-
-                        <th>
-                            Date
-                        </th>
-
-                        <th>
-                            Jewellery
-                        </th>
-
-                        <th>
-                            Work
-                        </th>
-
-                        <th>
-                            अंतिम वजन
-                        </th>
-
-                        <th>
-                            Amount
-                        </th>
-
-                        <th>
-                            Status
-                        </th>
-
-                    </tr>
-
         """
 
-        for j in jobs_rows:
+        con.close()
 
-            body += f"""
+        return page(
+            "Ledger",
+            body
+        )
+
+    customer = con.execute("""
+        SELECT *
+        FROM customers
+        WHERE id=?
+    """, (customer_id,)).fetchone()
+
+    if not customer:
+
+        con.close()
+
+        flash(
+            "Customer nahi mila.",
+            "error"
+        )
+
+        return redirect(
+            url_for("ledger")
+        )
+
+    jobs_rows = con.execute("""
+        SELECT *
+        FROM jobs
+        WHERE customer_id=?
+        ORDER BY date,id
+    """, (customer_id,)).fetchall()
+
+    payment_rows = con.execute("""
+        SELECT *
+        FROM payments
+        WHERE customer_id=?
+        ORDER BY date,id
+    """, (customer_id,)).fetchall()
+
+    total_work = sum(
+        float(r["work_amount"] or 0)
+        for r in jobs_rows
+    )
+
+    total_paid = sum(
+        float(r["amount"] or 0)
+        for r in payment_rows
+    )
+
+    balance = total_work - total_paid
+
+    con.close()
+
+    body = f"""
+
+    <div class="panel">
+
+        <div class="actions no-print">
+
+            <a
+                class="btn gray"
+                href="{url_for('ledger')}"
+            >
+                ← Customers
+            </a>
+
+            <button
+                class="btn"
+                onclick="window.print()"
+            >
+                🖨️ Print
+            </button>
+
+        </div>
+
+        <h2>
+            📒 Customer Ledger
+        </h2>
+
+        <h3>
+            {esc(customer["name"])}
+        </h3>
+
+        <p>
+            Mobile:
+            <b>{esc(customer["mobile"] or customer["phone"])}</b>
+        </p>
+
+        <p>
+            Address:
+            <b>{esc(customer["address"])}</b>
+        </p>
+
+    </div>
+
+
+    <div class="cardbox">
+
+        <div class="card">
+            <h3>TOTAL KAAM</h3>
+            <div class="stat">
+                {money(total_work)}
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>TOTAL PAID</h3>
+            <div class="stat credit">
+                {money(total_paid)}
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>BAAKI</h3>
+            <div class="stat debit">
+                {money(balance)}
+            </div>
+        </div>
+
+    </div>
+
+
+    <div class="panel">
+
+        <h3>💍 Job Entries</h3>
+
+        <div class="table">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+                        <th>Date</th>
+                        <th>Jewellery</th>
+                        <th>Work</th>
+                        <th>Final Weight</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+    """
+
+    for j in jobs_rows:
+
+        body += f"""
 
                     <tr>
 
@@ -3692,18 +3184,17 @@ def ledger():
                         </td>
 
                         <td>
-                            {esc(j["work"])}
+                            {esc(
+                                j["work"]
+                                or j["job_type"]
+                            )}
                         </td>
 
                         <td>
-                            {float(
-                                j["final_weight"]
-                                or j["net_weight"]
-                                or 0
-                            ):.3f} g
+                            {float(j["net_weight"] or 0):.3f} g
                         </td>
 
-                        <td>
+                        <td class="debit">
                             {money(j["work_amount"])}
                         </td>
 
@@ -3713,52 +3204,45 @@ def ledger():
 
                     </tr>
 
-            """
+        """
 
-        body += """
+    body += """
 
-                </table>
+                </tbody>
 
-            </div>
+            </table>
 
         </div>
 
+    </div>
 
-        <div class="panel">
 
-            <h3>
-                💰 Payments
-            </h3>
+    <div class="panel">
 
-            <div class="table">
+        <h3>💰 Payments</h3>
 
-                <table>
+        <div class="table">
+
+            <table>
+
+                <thead>
 
                     <tr>
-
-                        <th>
-                            Date
-                        </th>
-
-                        <th>
-                            Amount
-                        </th>
-
-                        <th>
-                            Mode
-                        </th>
-
-                        <th>
-                            Note
-                        </th>
-
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Mode</th>
+                        <th>Note</th>
                     </tr>
 
-        """
+                </thead>
 
-        for p in payment_rows:
+                <tbody>
 
-            body += f"""
+    """
+
+    for p in payment_rows:
+
+        body += f"""
 
                     <tr>
 
@@ -3780,167 +3264,11 @@ def ledger():
 
                     </tr>
 
-            """
-
-        body += """
-
-                </table>
-
-            </div>
-
-        </div>
-
-        """
-
-    return page(
-        "Ledger",
-        body
-    )
-
-
-# ============================================================
-# SEARCH
-# ============================================================
-
-@app.route("/search")
-@login_required
-def search():
-
-    q = request.args.get(
-        "q",
-        ""
-    ).strip()
-
-    con = db()
-
-    if q:
-
-        rows = con.execute(
-            """
-            SELECT *
-            FROM customers
-
-            WHERE
-                name LIKE ?
-                OR mobile LIKE ?
-
-            ORDER BY name
-            """,
-            (
-                f"%{q}%",
-                f"%{q}%"
-            )
-        ).fetchall()
-
-    else:
-
-        rows = []
-
-    con.close()
-
-    body = f"""
-
-    <h2>
-        🔎 Customer Search
-    </h2>
-
-    <div class="panel">
-
-        <form method="get">
-
-            <input
-                name="q"
-                value="{esc(q)}"
-                placeholder="Customer name / mobile"
-            >
-
-            <br><br>
-
-            <button
-                class="blue"
-                type="submit"
-            >
-                🔍 SEARCH
-            </button>
-
-        </form>
-
-    </div>
-
-
-    <div class="panel">
-
-        <div class="table">
-
-            <table>
-
-                <tr>
-
-                    <th>
-                        ID
-                    </th>
-
-                    <th>
-                        Name
-                    </th>
-
-                    <th>
-                        Mobile
-                    </th>
-
-                    <th>
-                        Address
-                    </th>
-
-                    <th>
-                        Action
-                    </th>
-
-                </tr>
-
-    """
-
-    for c in rows:
-
-        body += f"""
-
-                <tr>
-
-                    <td>
-                        {c["id"]}
-                    </td>
-
-                    <td>
-                        {esc(c["name"])}
-                    </td>
-
-                    <td>
-                        {esc(c["mobile"])}
-                    </td>
-
-                    <td>
-                        {esc(c["address"])}
-                    </td>
-
-                    <td>
-
-                        <a
-                            class="btn small"
-                            href="{url_for(
-                                'ledger',
-                                customer_id=c['id']
-                            )}"
-                        >
-                            📒 LEDGER
-                        </a>
-
-                    </td>
-
-                </tr>
-
         """
 
     body += """
+
+                </tbody>
 
             </table>
 
@@ -3951,7 +3279,7 @@ def search():
     """
 
     return page(
-        "Search",
+        "Customer Ledger",
         body
     )
 
@@ -3966,106 +3294,86 @@ def reports():
 
     con = db()
 
-    total_customers = con.execute(
-        """
-        SELECT COUNT(*)
-        FROM customers
-        WHERE active=1
-        """
-    ).fetchone()[0]
-
-    total_jobs = con.execute(
-        """
-        SELECT COUNT(*)
+    total_jobs = con.execute("""
+        SELECT COUNT(*) AS c
         FROM jobs
-        """
-    ).fetchone()[0]
+    """).fetchone()["c"]
 
-    total_work = con.execute(
-        """
-        SELECT COALESCE(
-            SUM(work_amount),0
-        )
+    total_work = con.execute("""
+        SELECT COALESCE(SUM(work_amount),0) AS c
         FROM jobs
-        """
-    ).fetchone()[0]
+    """).fetchone()["c"]
 
-    total_paid = con.execute(
-        """
-        SELECT COALESCE(
-            SUM(amount),0
-        )
+    total_paid = con.execute("""
+        SELECT COALESCE(SUM(amount),0) AS c
         FROM payments
-        """
-    ).fetchone()[0]
+    """).fetchone()["c"]
 
-    work_by_type = con.execute(
-        """
-        SELECT
-            work,
-            COUNT(*) AS total_jobs,
-            COALESCE(
-                SUM(work_amount),
-                0
-            ) AS total_amount
-
+    pending = con.execute("""
+        SELECT COUNT(*) AS c
         FROM jobs
+        WHERE status != 'Delivered'
+    """).fetchone()["c"]
 
+    work_types = con.execute("""
+        SELECT
+            COALESCE(work,'Other') AS work,
+            COUNT(*) AS count,
+            COALESCE(SUM(work_amount),0) AS amount
+        FROM jobs
         GROUP BY work
+        ORDER BY amount DESC
+    """).fetchall()
 
-        ORDER BY total_amount DESC
-        """
-    ).fetchall()
+    recent_jobs = con.execute("""
+        SELECT
+            j.*,
+            COALESCE(c.name,j.customer,'') AS customer_name
+        FROM jobs j
+        LEFT JOIN customers c
+            ON c.id=j.customer_id
+        ORDER BY j.id DESC
+        LIMIT 20
+    """).fetchall()
 
     con.close()
 
-    balance = (
-        float(total_work or 0)
-        -
-        float(total_paid or 0)
-    )
-
     body = f"""
 
-    <h2>
-        📊 Reports
-    </h2>
+    <div class="actions no-print">
+
+        <button
+            class="btn"
+            onclick="window.print()"
+        >
+            🖨️ Print Report
+        </button>
+
+    </div>
+
+    <h2>📊 Reports</h2>
 
     <div class="cardbox">
 
         <div class="card">
-            <h3>
-                Customers
-            </h3>
-            <b>
-                {total_customers}
-            </b>
+            <h3>TOTAL JOBS</h3>
+            <b>{total_jobs}</b>
         </div>
 
         <div class="card">
-            <h3>
-                Jobs
-            </h3>
-            <b>
-                {total_jobs}
-            </b>
+            <h3>TOTAL KAAM</h3>
+            <b>{money(total_work)}</b>
         </div>
 
         <div class="card">
-            <h3>
-                Total Kaam
-            </h3>
-            <b>
-                {money(total_work)}
-            </b>
+            <h3>TOTAL PAYMENT</h3>
+            <b>{money(total_paid)}</b>
         </div>
 
         <div class="card">
-            <h3>
-                Total Paid
-            </h3>
-            <b class="credit">
-                {money(total_paid)}
+            <h3>BAAKI</h3>
+            <b class="debit">
+                {money(total_work-total_paid)}
             </b>
         </div>
 
@@ -4074,55 +3382,49 @@ def reports():
 
     <div class="panel">
 
-        <h3>
-            📈 Work Summary
-        </h3>
+        <h3>📈 Work Summary</h3>
 
         <div class="table">
 
             <table>
 
-                <tr>
+                <thead>
+                    <tr>
+                        <th>Work</th>
+                        <th>Jobs</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
 
-                    <th>
-                        Work
-                    </th>
-
-                    <th>
-                        Jobs
-                    </th>
-
-                    <th>
-                        Amount
-                    </th>
-
-                </tr>
+                <tbody>
 
     """
 
-    for r in work_by_type:
+    for w in work_types:
 
         body += f"""
 
-                <tr>
+                    <tr>
 
-                    <td>
-                        {esc(r["work"])}
-                    </td>
+                        <td>
+                            {esc(w["work"])}
+                        </td>
 
-                    <td>
-                        {r["total_jobs"]}
-                    </td>
+                        <td>
+                            {w["count"]}
+                        </td>
 
-                    <td>
-                        {money(r["total_amount"])}
-                    </td>
+                        <td>
+                            {money(w["amount"])}
+                        </td>
 
-                </tr>
+                    </tr>
 
         """
 
-    body += f"""
+    body += """
+
+                </tbody>
 
             </table>
 
@@ -4134,11 +3436,70 @@ def reports():
     <div class="panel">
 
         <h3>
-            💰 Overall Baaki
+            📋 Recent Jobs
         </h3>
 
-        <div class="stat debit">
-            {money(balance)}
+        <div class="table">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Jewellery</th>
+                        <th>Work</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+    """
+
+    for j in recent_jobs:
+
+        body += f"""
+
+                    <tr>
+
+                        <td>
+                            {esc(j["date"])}
+                        </td>
+
+                        <td>
+                            {esc(j["customer_name"])}
+                        </td>
+
+                        <td>
+                            {esc(j["jewellery"])}
+                        </td>
+
+                        <td>
+                            {esc(j["work"] or j["job_type"])}
+                        </td>
+
+                        <td>
+                            {money(j["work_amount"])}
+                        </td>
+
+                        <td>
+                            {esc(j["status"])}
+                        </td>
+
+                    </tr>
+
+        """
+
+    body += """
+
+                </tbody>
+
+            </table>
+
         </div>
 
     </div>
@@ -4152,168 +3513,12 @@ def reports():
 
 
 # ============================================================
-# PDF REPORT
-# ============================================================
-
-@app.route("/reports/pdf")
-@login_required
-def reports_pdf():
-
-    con = db()
-
-    rows = con.execute(
-        """
-        SELECT
-            j.*,
-            c.name AS customer_name
-
-        FROM jobs j
-
-        JOIN customers c
-            ON c.id=j.customer_id
-
-        ORDER BY
-            j.date DESC,
-            j.id DESC
-        """
-    ).fetchall()
-
-    con.close()
-
-    buffer = BytesIO()
-
-    document = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=25,
-        leftMargin=25,
-        topMargin=25,
-        bottomMargin=25
-    )
-
-    styles = getSampleStyleSheet()
-
-    story = []
-
-    story.append(
-        Paragraph(
-            "R.K JEWELERS",
-            styles["Title"]
-        )
-    )
-
-    story.append(
-        Paragraph(
-            "Jewellery Job Work Report",
-            styles["Heading2"]
-        )
-    )
-
-    story.append(
-        Spacer(1, 15)
-    )
-
-    data = [
-        [
-            "Date",
-            "Customer",
-            "Jewellery",
-            "Work",
-            "Weight",
-            "Amount"
-        ]
-    ]
-
-    for r in rows:
-
-        data.append(
-            [
-                str(r["date"] or ""),
-                str(r["customer_name"] or ""),
-                str(r["jewellery"] or ""),
-                str(r["work"] or ""),
-                f'{float(r["final_weight"] or 0):.3f} g',
-                money(r["work_amount"])
-            ]
-        )
-
-    table = Table(
-        data,
-        repeatRows=1
-    )
-
-    table.setStyle(
-        TableStyle(
-            [
-                (
-                    "BACKGROUND",
-                    (0,0),
-                    (-1,0),
-                    colors.HexColor("#4a2915")
-                ),
-
-                (
-                    "TEXTCOLOR",
-                    (0,0),
-                    (-1,0),
-                    colors.white
-                ),
-
-                (
-                    "GRID",
-                    (0,0),
-                    (-1,-1),
-                    0.5,
-                    colors.grey
-                ),
-
-                (
-                    "FONTNAME",
-                    (0,0),
-                    (-1,0),
-                    "Helvetica-Bold"
-                ),
-
-                (
-                    "FONTSIZE",
-                    (0,0),
-                    (-1,-1),
-                    8
-                ),
-
-                (
-                    "VALIGN",
-                    (0,0),
-                    (-1,-1),
-                    "TOP"
-                )
-            ]
-        )
-    )
-
-    story.append(table)
-
-    document.build(story)
-
-    buffer.seek(0)
-
-    return send_file(
-        buffer,
-        as_attachment=True,
-        download_name="rk_jewellers_jobs_report.pdf",
-        mimetype="application/pdf"
-    )
-
-
-# ============================================================
 # BACKUP
 # ============================================================
 
-@app.get("/backup")
+@app.route("/backup")
 @login_required
 def backup():
-
-    setup()
 
     if not DB.exists():
 
@@ -4354,20 +3559,17 @@ def backup():
 # RESTORE
 # ============================================================
 
-@app.route(
-    "/restore",
-    methods=["GET", "POST"]
-)
+@app.route("/restore", methods=["GET", "POST"])
 @login_required
 def restore():
 
     if request.method == "POST":
 
-        uploaded = request.files.get(
-            "database"
+        file = request.files.get(
+            "backup_file"
         )
 
-        if not uploaded:
+        if not file or not file.filename:
 
             flash(
                 "Backup file select karo.",
@@ -4378,78 +3580,95 @@ def restore():
                 url_for("restore")
             )
 
-        filename = (
-            uploaded.filename
-            or ""
-        ).lower()
-
-        if not filename.endswith(".db"):
-
-            flash(
-                "Sirf .db backup file allowed hai.",
-                "error"
-            )
-
-            return redirect(
-                url_for("restore")
-            )
-
-        # Existing DB backup
-        if DB.exists():
+        try:
 
             timestamp = datetime.now().strftime(
                 "%Y%m%d_%H%M%S"
             )
 
-            old_backup = (
+            safety_backup = (
                 BACKUP_DIR
                 /
                 f"before_restore_{timestamp}.db"
             )
 
-            shutil.copy2(
-                DB,
-                old_backup
+            if DB.exists():
+
+                shutil.copy2(
+                    DB,
+                    safety_backup
+                )
+
+            temp_path = (
+                BACKUP_DIR
+                /
+                f"restore_{timestamp}.db"
             )
 
-        uploaded.save(DB)
+            file.save(temp_path)
 
-        setup()
+            # Check SQLite database
+            test = sqlite3.connect(
+                temp_path
+            )
 
-        flash(
-            "Database restore ho gaya.",
-            "success"
-        )
+            test.execute(
+                "PRAGMA integrity_check"
+            ).fetchone()
+
+            test.close()
+
+            shutil.copy2(
+                temp_path,
+                DB
+            )
+
+            temp_path.unlink(
+                missing_ok=True
+            )
+
+            setup()
+
+            flash(
+                "Database restore ho gaya.",
+                "success"
+            )
+
+        except Exception as e:
+
+            flash(
+                f"Restore failed: {e}",
+                "error"
+            )
 
         return redirect(
-            url_for("home")
+            url_for("restore")
         )
 
     body = """
 
-    <h2>
-        ♻️ Restore Database
-    </h2>
-
     <div class="panel">
 
-        <p>
-            Apni purani <b>.db</b> backup file select karein.
+        <h2>♻️ Restore Database</h2>
+
+        <p class="muted">
+            Restore karne se current database replace ho jayega.
+            Safety backup automatically banega.
         </p>
 
         <form
             method="post"
             enctype="multipart/form-data"
-            onsubmit="
-                return confirm(
-                    'Database restore karna hai?'
-                )
-            "
+            onsubmit="return confirm('Database restore karna hai?')"
         >
+
+            <label>
+                Backup Database File
+            </label>
 
             <input
                 type="file"
-                name="database"
+                name="backup_file"
                 accept=".db"
                 required
             >
@@ -4460,7 +3679,7 @@ def restore():
                 class="red"
                 type="submit"
             >
-                ♻️ RESTORE DATABASE
+                ♻️ Restore Database
             </button>
 
         </form>
@@ -4476,76 +3695,41 @@ def restore():
 
 
 # ============================================================
-# ABOUT
+# SHOP INFORMATION
 # ============================================================
 
-@app.get("/about")
+@app.route("/about")
 @login_required
 def about():
 
     body = """
 
-    <h2>
-        ℹ️ Shop Information
-    </h2>
-
     <div class="panel">
 
-        <h2>
-            R.K JEWELERS
-        </h2>
+        <h2>ℹ️ R.K JEWELERS</h2>
+
+        <h3>Jewellery Job Work Management</h3>
 
         <p>
-            Jewellery Job Work & Customer Ledger
-        </p>
-
-        <hr>
-
-        <h3>
-            Work Types
-        </h3>
-
-        <div class="actions">
-
-            <span class="badge yellow">
-                Nag Setting
-            </span>
-
-            <span class="badge yellow">
-                Kachi Jadai
-            </span>
-
-            <span class="badge yellow">
-                Chilai
-            </span>
-
-        </div>
-
-        <br>
-
-        <h3>
-            Weight Calculation
-        </h3>
-
-        <p>
-            <b>
-                वजन + नग वजन = कुल वजन
-            </b>
+            Nag Setting
         </p>
 
         <p>
-            <b>
-                कुल वजन - लॉस = अंतिम वजन
-            </b>
+            Kachi Jadai
+        </p>
+
+        <p>
+            Chilai
         </p>
 
         <hr>
 
         <p>
-            Developer:
-            <b>
-                KRISHNA
-            </b>
+            <b>Developer:</b> KRISHNA
+        </p>
+
+        <p class="muted">
+            R.K JEWELERS PRO
         </p>
 
     </div>
@@ -4553,56 +3737,91 @@ def about():
     """
 
     return page(
-        "About",
+        "Shop Information",
         body
     )
 
 
 # ============================================================
-# DASHBOARD ALIAS
+# ERROR HANDLERS
 # ============================================================
 
-@app.get("/dashboard")
-@login_required
-def dashboard():
+@app.errorhandler(404)
+def not_found(error):
 
-    return redirect(
-        url_for("home")
-    )
+    body = """
+
+    <div class="panel">
+
+        <h2>❌ Page Not Found</h2>
+
+        <p>
+            Ye page available nahi hai.
+        </p>
+
+        <a
+            class="btn"
+            href="/"
+        >
+            🏠 Dashboard
+        </a>
+
+    </div>
+
+    """
+
+    return page(
+        "Page Not Found",
+        body
+    ), 404
+
+
+@app.errorhandler(500)
+def internal_error(error):
+
+    body = """
+
+    <div class="panel">
+
+        <h2>⚠️ Application Error</h2>
+
+        <p>
+            Application me error aa gaya.
+        </p>
+
+        <a
+            class="btn"
+            href="/"
+        >
+            🏠 Dashboard
+        </a>
+
+    </div>
+
+    """
+
+    return page(
+        "Application Error",
+        body
+    ), 500
 
 
 # ============================================================
-# START
+# START APPLICATION
 # ============================================================
+
+setup()
+
 
 if __name__ == "__main__":
 
-    setup()
-
     print("=" * 55)
-
-    print(
-        "             R.K JEWELERS PRO"
-    )
-
+    print("              R.K JEWELERS PRO")
     print("=" * 55)
-
-    print(
-        "Developer : KRISHNA"
-    )
-
-    print(
-        "Server    : http://127.0.0.1:5000"
-    )
-
-    print(
-        "Username  : admin"
-    )
-
-    print(
-        "Password  : 1234"
-    )
-
+    print("Developer : KRISHNA")
+    print("Server    : http://127.0.0.1:5000")
+    print("Username  : admin")
+    print("Password  : 1234")
     print("=" * 55)
 
     app.run(
