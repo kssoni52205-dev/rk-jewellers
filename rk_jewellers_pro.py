@@ -1791,7 +1791,7 @@ def toggle_customer(cid):
     return redirect(
         url_for("customers")
     )
-    @app.route(
+@app.route(
     "/jobs",
     methods=["GET", "POST"]
 )
