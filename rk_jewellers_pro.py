@@ -47,28 +47,22 @@ BACKUP_DIR.mkdir(exist_ok=True)
 
 app = Flask(__name__)
 
-app.secret_key = (
-    os.environ.get("RK_SECRET_KEY")
-    or "rk-jewellers-krishna-secret-2026"
-)
+app.secret_key = os.environ.get("RK_SECRET_KEY") or os.urandom(32)
+
 
 # ============================================================
-# LOGIN
+# LOGIN DETAILS
 # ============================================================
 
-ADMIN_USER = os.environ.get(
-    "RK_ADMIN_USER",
-    "admin"
-)
+# Render par Environment Variables milenge to unko use karega.
+# Agar Environment Variables nahi mile to local/default login chalega.
 
-ADMIN_PASSWORD = os.environ.get(
-    "RK_ADMIN_PASSWORD",
-    "1234"
-)
+ADMIN_USER = os.environ.get("RK_ADMIN_USER", "admin")
+ADMIN_PASSWORD = os.environ.get("RK_ADMIN_PASSWORD", "1234")
 
-ADMIN_PASSWORD_HASH = generate_password_hash(
-    ADMIN_PASSWORD
-)
+
+# Password ko hash karke store karna
+ADMIN_PASSWORD_HASH = generate_password_hash(ADMIN_PASSWORD)
 
 
 # ============================================================
