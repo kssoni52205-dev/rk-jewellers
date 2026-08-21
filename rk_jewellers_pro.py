@@ -8,7 +8,12 @@ from flask import (
     send_file,
     url_for
 )
-from werkzeug.security import generate_password_hash, check_password_hash
+
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash
+)
+
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -24,7 +29,10 @@ import shutil
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import (
+    getSampleStyleSheet,
+    ParagraphStyle
+)
 from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import (
     SimpleDocTemplate,
@@ -47,23 +55,28 @@ BACKUP_DIR.mkdir(exist_ok=True)
 
 app = Flask(__name__)
 
-app.secret_key = os.environ.get("RK_SECRET_KEY") or os.urandom(32)
-
+app.secret_key = (
+    os.environ.get("RK_SECRET_KEY")
+    or os.urandom(32)
+)
 
 # ============================================================
 # LOGIN DETAILS
 # ============================================================
 
-# Render par Environment Variables milenge to unko use karega.
-# Agar Environment Variables nahi mile to local/default login chalega.
+ADMIN_USER = os.environ.get(
+    "RK_ADMIN_USER",
+    "admin"
+)
 
-ADMIN_USER = os.environ.get("RK_ADMIN_USER", "admin")
-ADMIN_PASSWORD = os.environ.get("RK_ADMIN_PASSWORD", "1234")
+ADMIN_PASSWORD = os.environ.get(
+    "RK_ADMIN_PASSWORD",
+    "1234"
+)
 
-
-# Password ko hash karke store karna
-ADMIN_PASSWORD_HASH = generate_password_hash(ADMIN_PASSWORD)
-
+ADMIN_PASSWORD_HASH = generate_password_hash(
+    ADMIN_PASSWORD
+)
 
 # ============================================================
 # DATABASE
@@ -88,16 +101,26 @@ def setup():
     con.executescript("""
 
     CREATE TABLE IF NOT EXISTS customers(
+
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+
         name TEXT NOT NULL,
+
         mobile TEXT DEFAULT '',
+
         address TEXT DEFAULT '',
+
         notes TEXT DEFAULT '',
+
         active INTEGER NOT NULL DEFAULT 1,
+
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
+
     );
 
+
     CREATE TABLE IF NOT EXISTS jobs(
+
         id INTEGER PRIMARY KEY AUTOINCREMENT,
 
         customer_id INTEGER NOT NULL,
@@ -128,6 +151,14 @@ def setup():
 
         net_weight REAL DEFAULT 0,
 
+        diamond_weight REAL DEFAULT 0,
+
+        diamond_count INTEGER DEFAULT 0,
+
+        fancy_diamond TEXT DEFAULT '',
+
+        touch_weight REAL DEFAULT 0,
+
         quantity INTEGER DEFAULT 1,
 
         taanch TEXT DEFAULT '',
@@ -141,9 +172,12 @@ def setup():
         FOREIGN KEY(customer_id)
         REFERENCES customers(id)
         ON DELETE CASCADE
+
     );
 
+
     CREATE TABLE IF NOT EXISTS payments(
+
         id INTEGER PRIMARY KEY AUTOINCREMENT,
 
         customer_id INTEGER NOT NULL,
@@ -161,7 +195,9 @@ def setup():
         FOREIGN KEY(customer_id)
         REFERENCES customers(id)
         ON DELETE CASCADE
+
     );
+
 
     CREATE INDEX IF NOT EXISTS idx_jobs_customer
     ON jobs(customer_id);
@@ -172,13 +208,20 @@ def setup():
     CREATE INDEX IF NOT EXISTS idx_payments_customer
     ON payments(customer_id);
 
+    CREATE INDEX IF NOT EXISTS idx_payments_date
+    ON payments(date);
+
     """)
 
     # ========================================================
     # OLD DATABASE UPGRADE
     # ========================================================
 
-    def add_column(table, column, definition):
+    def add_column(
+        table,
+        column,
+        definition
+    ):
 
         columns = {
             row["name"]
@@ -196,7 +239,10 @@ def setup():
                 """
             )
 
-    # Customers
+    # ========================================================
+    # CUSTOMERS
+    # ========================================================
+
     add_column(
         "customers",
         "mobile",
@@ -227,7 +273,10 @@ def setup():
         "TEXT"
     )
 
-    # Jobs
+    # ========================================================
+    # JOBS
+    # ========================================================
+
     add_column(
         "jobs",
         "customer_id",
@@ -257,6 +306,9 @@ def setup():
         "status",
         "TEXT NOT NULL DEFAULT 'Pending'"
     )
+
+    # Legacy columns kept for old database compatibility.
+    # They are NOT shown in the UI.
 
     add_column(
         "jobs",
@@ -314,6 +366,30 @@ def setup():
 
     add_column(
         "jobs",
+        "diamond_weight",
+        "REAL DEFAULT 0"
+    )
+
+    add_column(
+        "jobs",
+        "diamond_count",
+        "INTEGER DEFAULT 0"
+    )
+
+    add_column(
+        "jobs",
+        "fancy_diamond",
+        "TEXT DEFAULT ''"
+    )
+
+    add_column(
+        "jobs",
+        "touch_weight",
+        "REAL DEFAULT 0"
+    )
+
+    add_column(
+        "jobs",
         "quantity",
         "INTEGER DEFAULT 1"
     )
@@ -342,7 +418,10 @@ def setup():
         "TEXT"
     )
 
-    # Payments
+    # ========================================================
+    # PAYMENTS
+    # ========================================================
+
     add_column(
         "payments",
         "mode",
@@ -365,6 +444,28 @@ def setup():
     con.close()
 
 
+def ensure_database():
+
+    try:
+
+        setup()
+
+    except Exception as e:
+
+        print(
+            "DATABASE INITIALIZATION ERROR:",
+            e
+        )
+
+        raise
+
+
+@app.before_request
+def initialize_database():
+
+    ensure_database()
+
+
 # ============================================================
 # HELPERS
 # ============================================================
@@ -372,8 +473,11 @@ def setup():
 def money(value):
 
     try:
+
         value = float(value or 0)
+
     except Exception:
+
         value = 0
 
     return "₹ {:,.2f}".format(value)
@@ -386,7 +490,10 @@ def esc(value):
     )
 
 
-def parse_float(name, default=0.0):
+def parse_float(
+    name,
+    default=0.0
+):
 
     value = request.form.get(
         name,
@@ -394,9 +501,11 @@ def parse_float(name, default=0.0):
     ).strip()
 
     if value == "":
+
         return default
 
     try:
+
         return float(value)
 
     except ValueError:
@@ -406,7 +515,10 @@ def parse_float(name, default=0.0):
         )
 
 
-def parse_int(name, default=1):
+def parse_int(
+    name,
+    default=1
+):
 
     value = request.form.get(
         name,
@@ -414,9 +526,11 @@ def parse_int(name, default=1):
     ).strip()
 
     if value == "":
+
         return default
 
     try:
+
         return int(value)
 
     except ValueError:
@@ -429,9 +543,14 @@ def parse_int(name, default=1):
 def login_required(view):
 
     @wraps(view)
-    def wrapped(*args, **kwargs):
+    def wrapped(
+        *args,
+        **kwargs
+    ):
 
-        if not session.get("logged_in"):
+        if not session.get(
+            "logged_in"
+        ):
 
             return redirect(
                 url_for("login")
@@ -463,7 +582,9 @@ BASE_HTML = r"""
     content="width=device-width, initial-scale=1"
 >
 
-<title>{{ title }} - R.K JEWELERS</title>
+<title>
+    {{ title }} - R.K JEWELERS
+</title>
 
 <style>
 
@@ -472,7 +593,9 @@ BASE_HTML = r"""
 }
 
 body{
+
     margin:0;
+
     font-family:
         Arial,
         "Segoe UI",
@@ -494,6 +617,7 @@ body{
 }
 
 header{
+
     background:
         linear-gradient(
             135deg,
@@ -516,6 +640,7 @@ header{
 }
 
 header h1{
+
     margin:0;
 
     font-size:34px;
@@ -529,12 +654,14 @@ header h1{
 }
 
 header p{
+
     margin:5px 0 0;
 
     color:#fff2bd;
 }
 
 .layout{
+
     display:flex;
 
     min-height:
@@ -542,6 +669,7 @@ header p{
 }
 
 nav{
+
     width:245px;
 
     flex-shrink:0;
@@ -560,6 +688,7 @@ nav{
 }
 
 nav a{
+
     display:block;
 
     text-decoration:none;
@@ -574,11 +703,11 @@ nav a{
 
     font-weight:bold;
 
-    transition:
-        .2s;
+    transition:.2s;
 }
 
 nav a:hover{
+
     background:
         linear-gradient(
             90deg,
@@ -593,6 +722,7 @@ nav a:hover{
 }
 
 .userbox{
+
     color:#ffe48c;
 
     padding:10px;
@@ -606,6 +736,7 @@ nav a:hover{
 }
 
 main{
+
     flex:1;
 
     padding:24px;
@@ -614,6 +745,7 @@ main{
 }
 
 .cardbox{
+
     display:grid;
 
     grid-template-columns:
@@ -623,6 +755,7 @@ main{
 }
 
 .card{
+
     background:
         rgba(255,255,255,.95);
 
@@ -641,6 +774,7 @@ main{
 }
 
 .card h3{
+
     margin:0;
 
     color:#777;
@@ -649,6 +783,7 @@ main{
 }
 
 .card b{
+
     display:block;
 
     font-size:25px;
@@ -659,6 +794,7 @@ main{
 }
 
 .panel{
+
     background:
         rgba(255,255,255,.96);
 
@@ -676,6 +812,7 @@ main{
 }
 
 .form{
+
     display:grid;
 
     grid-template-columns:
@@ -687,6 +824,7 @@ main{
 input,
 select,
 textarea{
+
     width:100%;
 
     padding:12px;
@@ -706,6 +844,7 @@ textarea{
 input:focus,
 select:focus,
 textarea:focus{
+
     border-color:#d4a62b;
 
     box-shadow:
@@ -713,10 +852,12 @@ textarea:focus{
 }
 
 textarea{
+
     min-height:80px;
 }
 
 label{
+
     display:block;
 
     font-weight:bold;
@@ -728,6 +869,7 @@ label{
 
 button,
 .btn{
+
     border:0;
 
     padding:11px 16px;
@@ -754,6 +896,7 @@ button,
 
 button:hover,
 .btn:hover{
+
     filter:brightness(1.08);
 
     transform:
@@ -761,6 +904,7 @@ button:hover,
 }
 
 .green{
+
     background:
         linear-gradient(
             135deg,
@@ -772,6 +916,7 @@ button:hover,
 }
 
 .red{
+
     background:
         linear-gradient(
             135deg,
@@ -783,6 +928,7 @@ button:hover,
 }
 
 .blue{
+
     background:
         linear-gradient(
             135deg,
@@ -794,12 +940,14 @@ button:hover,
 }
 
 .gray{
+
     background:#687078;
 
     color:white;
 }
 
 .whatsapp{
+
     background:
         linear-gradient(
             135deg,
@@ -811,24 +959,28 @@ button:hover,
 }
 
 .small{
+
     padding:7px 10px;
 
     font-size:12px;
 }
 
 .table{
+
     overflow-x:auto;
 }
 
 table{
+
     width:100%;
 
     border-collapse:collapse;
 
-    min-width:900px;
+    min-width:950px;
 }
 
 th{
+
     background:
         linear-gradient(
             90deg,
@@ -846,6 +998,7 @@ th{
 }
 
 td{
+
     padding:10px;
 
     border-bottom:
@@ -855,10 +1008,12 @@ td{
 }
 
 tr:hover td{
+
     background:#fffaf0;
 }
 
 .msg{
+
     background:#dff5e8;
 
     padding:13px;
@@ -873,6 +1028,7 @@ tr:hover td{
 }
 
 .err{
+
     background:#ffe1e4;
 
     padding:13px;
@@ -887,6 +1043,7 @@ tr:hover td{
 }
 
 .badge{
+
     display:inline-block;
 
     padding:5px 9px;
@@ -901,28 +1058,33 @@ tr:hover td{
 }
 
 .badge.green{
+
     background:#dff5e8;
 
     color:#17663c;
 }
 
 .badge.yellow{
+
     background:#fff0bd;
 
     color:#785b00;
 }
 
 .badge.red{
+
     background:#ffe1e4;
 
     color:#8b1e2b;
 }
 
 .muted{
+
     color:#777;
 }
 
 .actions{
+
     display:flex;
 
     gap:6px;
@@ -931,6 +1093,7 @@ tr:hover td{
 }
 
 .two{
+
     display:grid;
 
     grid-template-columns:
@@ -940,6 +1103,7 @@ tr:hover td{
 }
 
 .toolbar{
+
     display:flex;
 
     gap:10px;
@@ -950,34 +1114,40 @@ tr:hover td{
 }
 
 .login{
+
     max-width:430px;
 
     margin:70px auto;
 }
 
 .login .panel{
+
     padding:30px;
 }
 
 .balance{
+
     font-size:28px;
 
     font-weight:bold;
 }
 
 .debit{
+
     color:#b51f32;
 
     font-weight:bold;
 }
 
 .credit{
+
     color:#16864f;
 
     font-weight:bold;
 }
 
 .mobile-menu{
+
     display:none;
 
     background:#2b180d;
@@ -990,32 +1160,55 @@ tr:hover td{
 }
 
 .search-box{
+
     display:flex;
 
     gap:8px;
 }
 
 .search-box input{
+
     flex:1;
 }
 
-hr{
-    border:0;
+.weight-box{
 
-    border-top:
-        1px solid #ead8af;
+    border:
+        2px solid #e1bb52;
 
-    margin:20px 0;
+    border-radius:15px;
+
+    padding:15px;
+
+    background:
+        linear-gradient(
+            135deg,
+            #fffdf5,
+            #fff3c9
+        );
+}
+
+.auto-box{
+
+    background:
+        #fff0bc;
+
+    border-color:
+        #d0a52d;
+
+    font-weight:bold;
 }
 
 @media(max-width:1050px){
 
     .cardbox{
+
         grid-template-columns:
             repeat(2,1fr);
     }
 
     .form{
+
         grid-template-columns:
             repeat(2,1fr);
     }
@@ -1024,28 +1217,34 @@ hr{
 @media(max-width:700px){
 
     .mobile-menu{
+
         display:block;
     }
 
     .layout{
+
         display:block;
     }
 
     nav{
+
         display:none;
 
         width:100%;
     }
 
     nav.show{
+
         display:block;
     }
 
     main{
+
         padding:10px;
     }
 
     .cardbox{
+
         grid-template-columns:
             repeat(2,1fr);
 
@@ -1053,26 +1252,32 @@ hr{
     }
 
     .card{
+
         padding:14px;
     }
 
     .card b{
+
         font-size:18px;
     }
 
     .form{
+
         grid-template-columns:1fr;
     }
 
     .two{
+
         grid-template-columns:1fr;
     }
 
     .panel{
+
         padding:14px;
     }
 
     header h1{
+
         font-size:25px;
     }
 }
@@ -1083,17 +1288,19 @@ hr{
     nav,
     .mobile-menu,
     .no-print{
+
         display:none !important;
     }
 
     body{
+
         background:white;
     }
 
     main{
+
         padding:0;
     }
-
 }
 
 </style>
@@ -1104,10 +1311,12 @@ hr{
 
 <header>
 
-<h1>R.K JEWELERS</h1>
+<h1>
+    R.K JEWELERS
+</h1>
 
 <p>
-JEWELLERY JOB WORK • CUSTOMER LEDGER • ACCOUNTS
+    JEWELLERY JOB WORK • CUSTOMER LEDGER • ACCOUNTS
 </p>
 
 </header>
@@ -1133,47 +1342,47 @@ JEWELLERY JOB WORK • CUSTOMER LEDGER • ACCOUNTS
 {% if session.get('logged_in') %}
 
 <div class="userbox">
-Logged in as {{ session.get('user') }}
+    Logged in as {{ session.get('user') }}
 </div>
 
 <a href="{{ url_for('home') }}">
-🏠 Dashboard
+    🏠 Dashboard
 </a>
 
 <a href="{{ url_for('customers') }}">
-👥 Customers
+    👥 Customers
 </a>
 
 <a href="{{ url_for('jobs') }}">
-💎 Job Entry
+    💎 Job Entry
 </a>
 
 <a href="{{ url_for('payments') }}">
-💰 Payment Entry
+    💰 Payment Entry
 </a>
 
 <a href="{{ url_for('ledger') }}">
-📒 Customer Ledger
+    📒 Customer Ledger
 </a>
 
 <a href="{{ url_for('reports') }}">
-📊 Reports
+    📊 Reports
 </a>
 
 <a href="{{ url_for('search') }}">
-🔎 Search
+    🔎 Search
 </a>
 
 <a href="{{ url_for('backup') }}">
-💾 Backup
+    💾 Backup
 </a>
 
 <a href="{{ url_for('about') }}">
-ℹ️ Shop Information
+    ℹ️ Shop Information
 </a>
 
 <a href="{{ url_for('logout') }}">
-🚪 Logout
+    🚪 Logout
 </a>
 
 {% endif %}
@@ -1189,7 +1398,7 @@ Logged in as {{ session.get('user') }}
 {% for m in messages %}
 
 <div class="msg">
-{{ m }}
+    {{ m }}
 </div>
 
 {% endfor %}
@@ -1203,7 +1412,7 @@ Logged in as {{ session.get('user') }}
 {% for m in messages %}
 
 <div class="err">
-{{ m }}
+    {{ m }}
 </div>
 
 {% endfor %}
@@ -1222,7 +1431,10 @@ Logged in as {{ session.get('user') }}
 """
 
 
-def page(title, body):
+def page(
+    title,
+    body
+):
 
     return render_template_string(
         BASE_HTML,
@@ -1426,39 +1638,80 @@ def home():
     <div class="cardbox">
 
         <div class="card">
-            <h3>ACTIVE CUSTOMERS</h3>
-            <b>{customers_count}</b>
+
+            <h3>
+                ACTIVE CUSTOMERS
+            </h3>
+
+            <b>
+                {customers_count}
+            </b>
+
         </div>
 
         <div class="card">
-            <h3>TOTAL JOBS</h3>
-            <b>{jobs_count}</b>
+
+            <h3>
+                TOTAL JOBS
+            </h3>
+
+            <b>
+                {jobs_count}
+            </b>
+
         </div>
 
         <div class="card">
-            <h3>TOTAL KAAM</h3>
-            <b>{money(total_work)}</b>
+
+            <h3>
+                TOTAL KAAM
+            </h3>
+
+            <b>
+                {money(total_work)}
+            </b>
+
         </div>
 
         <div class="card">
-            <h3>TOTAL PAYMENT</h3>
-            <b>{money(total_paid)}</b>
+
+            <h3>
+                TOTAL PAYMENT
+            </h3>
+
+            <b>
+                {money(total_paid)}
+            </b>
+
         </div>
 
     </div>
 
-    <div class="cardbox" style="margin-top:15px;">
+    <div class="cardbox"
+         style="margin-top:15px;">
 
         <div class="card">
-            <h3>PENDING JOBS</h3>
-            <b>{pending}</b>
+
+            <h3>
+                PENDING JOBS
+            </h3>
+
+            <b>
+                {pending}
+            </b>
+
         </div>
 
         <div class="card">
-            <h3>TOTAL BAAKI</h3>
+
+            <h3>
+                TOTAL BAAKI
+            </h3>
+
             <b class="debit">
                 {money(balance)}
             </b>
+
         </div>
 
     </div>
@@ -1516,7 +1769,9 @@ def home():
         </p>
 
         <p>
-            <b>Developer: KRISHNA</b>
+            <b>
+                Developer: KRISHNA
+            </b>
         </p>
 
     </div>
@@ -1648,6 +1903,7 @@ def customers():
     rows = con.execute(
         """
         SELECT
+
             c.*,
 
             COUNT(j.id) AS jobs_count,
@@ -1708,36 +1964,52 @@ def customers():
             <div class="form">
 
                 <div>
-                    <label>Name</label>
+
+                    <label>
+                        Name
+                    </label>
 
                     <input
                         name="name"
                         required
                         placeholder="Customer name"
                     >
+
                 </div>
 
                 <div>
-                    <label>Mobile</label>
+
+                    <label>
+                        Mobile
+                    </label>
 
                     <input
                         name="mobile"
                         placeholder="Mobile number"
                     >
+
                 </div>
 
                 <div>
-                    <label>Address</label>
+
+                    <label>
+                        Address
+                    </label>
 
                     <input
                         name="address"
                         placeholder="Address"
                     >
+
                 </div>
 
-                <div style="grid-column:1/-1">
+                <div
+                    style="grid-column:1/-1"
+                >
 
-                    <label>Notes</label>
+                    <label>
+                        Notes
+                    </label>
 
                     <textarea
                         name="notes"
@@ -1773,13 +2045,33 @@ def customers():
 
             <tr>
 
-                <th>Name</th>
-                <th>Mobile</th>
-                <th>Jobs</th>
-                <th>Total Kaam</th>
-                <th>Paid</th>
-                <th>Baaki</th>
-                <th>Action</th>
+                <th>
+                    Name
+                </th>
+
+                <th>
+                    Mobile
+                </th>
+
+                <th>
+                    Jobs
+                </th>
+
+                <th>
+                    Total Kaam
+                </th>
+
+                <th>
+                    Paid
+                </th>
+
+                <th>
+                    Baaki
+                </th>
+
+                <th>
+                    Action
+                </th>
 
             </tr>
 
@@ -1788,14 +2080,21 @@ def customers():
             <tr>
 
                 <td>
-                    <b>{{ r["name"] }}</b>
+
+                    <b>
+                        {{ r["name"] }}
+                    </b>
 
                     {% if r["address"] %}
+
                     <br>
+
                     <span class="muted">
                         {{ r["address"] }}
                     </span>
+
                     {% endif %}
+
                 </td>
 
                 <td>
@@ -1807,11 +2106,19 @@ def customers():
                 </td>
 
                 <td>
-                    ₹ {{ "%.2f"|format(r["total_work"] or 0) }}
+                    ₹ {{
+                        "%.2f"|format(
+                            r["total_work"] or 0
+                        )
+                    }}
                 </td>
 
                 <td class="credit">
-                    ₹ {{ "%.2f"|format(r["total_paid"] or 0) }}
+                    ₹ {{
+                        "%.2f"|format(
+                            r["total_paid"] or 0
+                        )
+                    }}
                 </td>
 
                 <td class="debit">
@@ -1843,7 +2150,7 @@ def customers():
                         <a
                             class="btn small whatsapp"
                             target="_blank"
-                            href="https://wa.me/{{ r['mobile']|replace('+','')|replace(' ','') }}"
+                            href="https://wa.me/{{ r['mobile']|replace('+','')|replace(' ','')|replace('-','') }}"
                         >
                             💬 WhatsApp
                         </a>
@@ -1890,9 +2197,11 @@ def customers():
             {% else %}
 
             <tr>
+
                 <td colspan="7">
                     Abhi koi customer nahi hai.
                 </td>
+
             </tr>
 
             {% endfor %}
@@ -1977,18 +2286,12 @@ def jobs():
                 "Pending"
             ).strip()
 
-            maal_aaya = request.form.get(
-                "maal_aaya",
-                ""
-            ).strip()
+            # ================================================
+            # JEWELLERY WEIGHT
+            # ================================================
 
-            maal_diyaa = request.form.get(
-                "maal_diyaa",
-                ""
-            ).strip()
-
-            gross_weight = parse_float(
-                "gross_weight"
+            weight = parse_float(
+                "weight"
             )
 
             nag_weight = parse_float(
@@ -1997,6 +2300,24 @@ def jobs():
 
             loss = parse_float(
                 "loss"
+            )
+
+            diamond_weight = parse_float(
+                "diamond_weight"
+            )
+
+            diamond_count = parse_int(
+                "diamond_count",
+                0
+            )
+
+            fancy_diamond = request.form.get(
+                "fancy_diamond",
+                ""
+            ).strip()
+
+            touch_weight = parse_float(
+                "touch_weight"
             )
 
             quantity = parse_int(
@@ -2018,117 +2339,154 @@ def jobs():
                 ""
             ).strip()
 
+            # ================================================
+            # AUTOMATIC CALCULATION
+            # वजन + नग वजन = कुल वजन
+            # कुल वजन - लॉस = अंतिम वजन
+            # ================================================
+
             total_weight = (
-                gross_weight
-                +
+                weight +
                 nag_weight
             )
 
             final_weight = (
-                total_weight
-                -
+                total_weight -
                 loss
             )
 
             if customer_id <= 0:
+
                 raise ValueError(
                     "Customer select karo."
                 )
 
             if not date_value:
+
                 raise ValueError(
                     "Date zaroori hai."
                 )
 
             if not jewellery:
+
                 raise ValueError(
                     "Jewellery name zaroori hai."
                 )
 
-            if gross_weight < 0:
+            if weight < 0:
+
                 raise ValueError(
                     "वजन negative nahi ho sakta."
                 )
 
             if nag_weight < 0:
+
                 raise ValueError(
                     "नग वजन negative nahi ho sakta."
                 )
 
             if loss < 0:
+
                 raise ValueError(
                     "लॉस negative nahi ho sakta."
                 )
 
             if final_weight < 0:
+
                 raise ValueError(
                     "अंतिम वजन negative nahi ho sakta."
                 )
 
+            if diamond_weight < 0:
+
+                raise ValueError(
+                    "डायमंड वजन negative nahi ho sakta."
+                )
+
+            if diamond_count < 0:
+
+                raise ValueError(
+                    "डायमंड गिनती negative nahi ho sakti."
+                )
+
+            if touch_weight < 0:
+
+                raise ValueError(
+                    "टच वजन negative nahi ho sakta."
+                )
+
             if quantity < 1:
+
                 raise ValueError(
                     "नग kam se kam 1 hona chahiye."
                 )
 
             if work_amount < 0:
+
                 raise ValueError(
                     "Amount negative nahi ho sakta."
                 )
-
-            # IMPORTANT:
-            # Exactly 20 columns
-            # Exactly 20 values
-            data = (
-                customer_id,
-                date_value,
-                jewellery,
-                work,
-                status,
-                maal_aaya,
-                maal_diyaa,
-                gross_weight,
-                nag_weight,
-                total_weight,
-                loss,
-                final_weight,
-                nag_weight,
-                final_weight,
-                quantity,
-                taanch,
-                work_amount,
-                notes,
-                datetime.now().isoformat(),
-                datetime.now().isoformat()
-            )
 
             if edit_id:
 
                 con.execute(
                     """
                     UPDATE jobs
+
                     SET
                         customer_id=?,
                         date=?,
                         jewellery=?,
                         work=?,
                         status=?,
-                        maal_aaya=?,
-                        maal_diyaa=?,
+
                         gross_weight=?,
                         nag_weight=?,
                         total_weight=?,
                         loss=?,
                         final_weight=?,
-                        stone_weight=?,
+
                         net_weight=?,
+
+                        diamond_weight=?,
+                        diamond_count=?,
+                        fancy_diamond=?,
+                        touch_weight=?,
+
                         quantity=?,
                         taanch=?,
                         work_amount=?,
-                        notes=?,
-                        created_at=?
+                        notes=?
+
                     WHERE id=?
                     """,
-                    data[:19] + (edit_id,)
+                    (
+                        customer_id,
+                        date_value,
+                        jewellery,
+                        work,
+                        status,
+
+                        weight,
+                        nag_weight,
+                        total_weight,
+                        loss,
+                        final_weight,
+
+                        final_weight,
+
+                        diamond_weight,
+                        diamond_count,
+                        fancy_diamond,
+                        touch_weight,
+
+                        quantity,
+                        taanch,
+                        work_amount,
+                        notes,
+
+                        edit_id
+                    )
                 )
 
                 message = (
@@ -2146,23 +2504,30 @@ def jobs():
                         jewellery,
                         work,
                         status,
-                        maal_aaya,
-                        maal_diyaa,
+
                         gross_weight,
                         nag_weight,
                         total_weight,
                         loss,
                         final_weight,
-                        stone_weight,
+
                         net_weight,
+
+                        diamond_weight,
+                        diamond_count,
+                        fancy_diamond,
+                        touch_weight,
+
                         quantity,
                         taanch,
                         work_amount,
                         notes,
                         created_at
                     )
+
                     VALUES
                     (
+                        ?,
                         ?,
                         ?,
                         ?,
@@ -2184,7 +2549,32 @@ def jobs():
                         ?
                     )
                     """,
-                    data[:19]
+                    (
+                        customer_id,
+                        date_value,
+                        jewellery,
+                        work,
+                        status,
+
+                        weight,
+                        nag_weight,
+                        total_weight,
+                        loss,
+                        final_weight,
+
+                        final_weight,
+
+                        diamond_weight,
+                        diamond_count,
+                        fancy_diamond,
+                        touch_weight,
+
+                        quantity,
+                        taanch,
+                        work_amount,
+                        notes,
+                        datetime.now().isoformat()
+                    )
                 )
 
                 message = (
@@ -2215,7 +2605,9 @@ def jobs():
 
     customers_rows = con.execute(
         """
-        SELECT id,name
+        SELECT
+            id,
+            name
         FROM customers
         WHERE active=1
         ORDER BY name
@@ -2226,11 +2618,16 @@ def jobs():
         """
         SELECT
             j.*,
+
             c.name AS customer_name,
+
             c.mobile AS customer_mobile
+
         FROM jobs j
+
         LEFT JOIN customers c
             ON c.id=j.customer_id
+
         ORDER BY
             j.date DESC,
             j.id DESC
@@ -2245,33 +2642,80 @@ def jobs():
 
     if edit_job:
 
-        selected_customer = edit_job["customer_id"]
+        selected_customer = (
+            edit_job["customer_id"]
+        )
 
-        form_date = edit_job["date"]
+        form_date = (
+            edit_job["date"]
+        )
 
-        form_jewellery = edit_job["jewellery"]
+        form_jewellery = (
+            edit_job["jewellery"]
+        )
 
-        form_work = edit_job["work"]
+        form_work = (
+            edit_job["work"]
+        )
 
-        form_status = edit_job["status"]
+        form_status = (
+            edit_job["status"]
+        )
 
-        form_maal_aaya = edit_job["maal_aaya"]
+        form_weight = (
+            edit_job["gross_weight"]
+            or 0
+        )
 
-        form_maal_diyaa = edit_job["maal_diyaa"]
+        form_nag_weight = (
+            edit_job["nag_weight"]
+            or 0
+        )
 
-        form_gross = edit_job["gross_weight"]
+        form_loss = (
+            edit_job["loss"]
+            or 0
+        )
 
-        form_nag = edit_job["nag_weight"]
+        form_diamond_weight = (
+            edit_job["diamond_weight"]
+            or 0
+        )
 
-        form_loss = edit_job["loss"]
+        form_diamond_count = (
+            edit_job["diamond_count"]
+            or 0
+        )
 
-        form_quantity = edit_job["quantity"]
+        form_fancy_diamond = (
+            edit_job["fancy_diamond"]
+            or ""
+        )
 
-        form_taanch = edit_job["taanch"]
+        form_touch_weight = (
+            edit_job["touch_weight"]
+            or 0
+        )
 
-        form_amount = edit_job["work_amount"]
+        form_quantity = (
+            edit_job["quantity"]
+            or 1
+        )
 
-        form_notes = edit_job["notes"]
+        form_taanch = (
+            edit_job["taanch"]
+            or ""
+        )
+
+        form_amount = (
+            edit_job["work_amount"]
+            or 0
+        )
+
+        form_notes = (
+            edit_job["notes"]
+            or ""
+        )
 
         heading = "✏️ EDIT JOB"
 
@@ -2289,15 +2733,19 @@ def jobs():
 
         form_status = "Pending"
 
-        form_maal_aaya = ""
+        form_weight = 0
 
-        form_maal_diyaa = ""
-
-        form_gross = 0
-
-        form_nag = 0
+        form_nag_weight = 0
 
         form_loss = 0
+
+        form_diamond_weight = 0
+
+        form_diamond_count = 0
+
+        form_fancy_diamond = ""
+
+        form_touch_weight = 0
 
         form_quantity = 1
 
@@ -2310,6 +2758,29 @@ def jobs():
         heading = "💎 NEW JOB ENTRY"
 
         button = "SAVE JOB"
+
+    customer_options = ""
+
+    for c in customers_rows:
+
+        selected = (
+            "selected"
+            if str(c["id"])
+            ==
+            str(selected_customer)
+            else ""
+        )
+
+        customer_options += f"""
+
+        <option
+            value="{c['id']}"
+            {selected}
+        >
+            {esc(c['name'])}
+        </option>
+
+        """
 
     body = f"""
 
@@ -2324,7 +2795,10 @@ def jobs():
         <div class="form">
 
             <div>
-                <label>Customer</label>
+
+                <label>
+                    Customer
+                </label>
 
                 <select
                     name="customer_id"
@@ -2335,26 +2809,17 @@ def jobs():
                         Select Customer
                     </option>
 
-                    {
-                        "".join(
-                            f'''
-                            <option
-                                value="{c["id"]}"
-                                {"selected" if str(c["id"]) == str(selected_customer) else ""}
-                            >
-                                {esc(c["name"])}
-                            </option>
-                            '''
-                            for c in customers_rows
-                        )
-                    }
+                    {customer_options}
 
                 </select>
 
             </div>
 
             <div>
-                <label>Date</label>
+
+                <label>
+                    Date
+                </label>
 
                 <input
                     type="date"
@@ -2362,10 +2827,14 @@ def jobs():
                     value="{esc(form_date)}"
                     required
                 >
+
             </div>
 
             <div>
-                <label>Jewellery</label>
+
+                <label>
+                    Jewellery
+                </label>
 
                 <input
                     name="jewellery"
@@ -2373,12 +2842,18 @@ def jobs():
                     placeholder="Ring / Chain / Pendant"
                     required
                 >
+
             </div>
 
             <div>
-                <label>Work</label>
 
-                <select name="work">
+                <label>
+                    Work
+                </label>
+
+                <select
+                    name="work"
+                >
 
                     <option
                         {"selected" if form_work == "Nag Setting" else ""}
@@ -2405,12 +2880,18 @@ def jobs():
                     </option>
 
                 </select>
+
             </div>
 
             <div>
-                <label>Status</label>
 
-                <select name="status">
+                <label>
+                    Status
+                </label>
+
+                <select
+                    name="status"
+                >
 
                     <option
                         {"selected" if form_status == "Pending" else ""}
@@ -2437,28 +2918,14 @@ def jobs():
                     </option>
 
                 </select>
+
             </div>
 
             <div>
-                <label>माल आया</label>
 
-                <input
-                    name="maal_aaya"
-                    value="{esc(form_maal_aaya)}"
-                >
-            </div>
-
-            <div>
-                <label>माल गया</label>
-
-                <input
-                    name="maal_diyaa"
-                    value="{esc(form_maal_diyaa)}"
-                >
-            </div>
-
-            <div>
-                <label>नग</label>
+                <label>
+                    नग
+                </label>
 
                 <input
                     type="number"
@@ -2466,100 +2933,196 @@ def jobs():
                     min="1"
                     value="{form_quantity}"
                 >
+
             </div>
 
             <div>
-                <label>ताँच</label>
+
+                <label>
+                    डायमंड वजन
+                </label>
+
+                <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    name="diamond_weight"
+                    value="{form_diamond_weight}"
+                >
+
+            </div>
+
+            <div>
+
+                <label>
+                    डायमंड गिनती
+                </label>
+
+                <input
+                    type="number"
+                    min="0"
+                    name="diamond_count"
+                    value="{form_diamond_count}"
+                >
+
+            </div>
+
+            <div>
+
+                <label>
+                    फैंसी डायमंड
+                </label>
+
+                <input
+                    name="fancy_diamond"
+                    value="{esc(form_fancy_diamond)}"
+                    placeholder="फैंसी डायमंड"
+                >
+
+            </div>
+
+            <div>
+
+                <label>
+                    टच वजन
+                </label>
+
+                <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    name="touch_weight"
+                    value="{form_touch_weight}"
+                >
+
+            </div>
+
+            <div>
+
+                <label>
+                    टाँच
+                </label>
 
                 <input
                     name="taanch"
                     value="{esc(form_taanch)}"
-                    placeholder="ताँच"
+                    placeholder="टाँच"
                 >
+
             </div>
 
             <div>
-                <label>काम की रकम</label>
+
+                <label>
+                    काम की रकम
+                </label>
 
                 <input
                     type="number"
                     step="0.01"
-                    name="work_amount"
                     min="0"
+                    name="work_amount"
                     value="{form_amount}"
                 >
+
             </div>
 
         </div>
 
         <hr>
 
-        <h3>
-            ⚖️ वजन विवरण
-        </h3>
+        <div class="weight-box">
 
-        <div class="form">
+            <h3>
+                ⚖️ वजन विवरण
+            </h3>
 
-            <div>
-                <label>वजन</label>
+            <div class="form">
 
-                <input
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    name="gross_weight"
-                    id="gross_weight"
-                    value="{form_gross}"
-                    oninput="calculateWeight()"
-                >
-            </div>
+                <div>
 
-            <div>
-                <label>+ नग वजन</label>
+                    <label>
+                        वजन
+                    </label>
 
-                <input
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    name="nag_weight"
-                    id="nag_weight"
-                    value="{form_nag}"
-                    oninput="calculateWeight()"
-                >
-            </div>
+                    <input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        name="weight"
+                        id="weight"
+                        value="{form_weight}"
+                        oninput="calculateWeight()"
+                    >
 
-            <div>
-                <label>= कुल वजन</label>
+                </div>
 
-                <input
-                    type="text"
-                    id="total_weight"
-                    readonly
-                >
-            </div>
+                <div>
 
-            <div>
-                <label>- लॉस</label>
+                    <label>
+                        + नग वजन
+                    </label>
 
-                <input
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    name="loss"
-                    id="loss"
-                    value="{form_loss}"
-                    oninput="calculateWeight()"
-                >
-            </div>
+                    <input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        name="nag_weight"
+                        id="nag_weight"
+                        value="{form_nag_weight}"
+                        oninput="calculateWeight()"
+                    >
 
-            <div>
-                <label>= अंतिम वजन</label>
+                </div>
 
-                <input
-                    type="text"
-                    id="final_weight"
-                    readonly
-                >
+                <div>
+
+                    <label>
+                        = कुल वजन
+                    </label>
+
+                    <input
+                        class="auto-box"
+                        type="text"
+                        id="total_weight"
+                        readonly
+                    >
+
+                </div>
+
+                <div>
+
+                    <label>
+                        - लॉस
+                    </label>
+
+                    <input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        name="loss"
+                        id="loss"
+                        value="{form_loss}"
+                        oninput="calculateWeight()"
+                    >
+
+                </div>
+
+                <div>
+
+                    <label>
+                        = अंतिम वजन
+                    </label>
+
+                    <input
+                        class="auto-box"
+                        type="text"
+                        id="final_weight"
+                        readonly
+                    >
+
+                </div>
+
             </div>
 
         </div>
@@ -2607,16 +3170,49 @@ def jobs():
 
             <tr>
 
-                <th>ID</th>
-                <th>Date</th>
-                <th>Customer</th>
-                <th>Jewellery</th>
-                <th>Work</th>
-                <th>Weight</th>
-                <th>ताँच</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Action</th>
+                <th>
+                    ID
+                </th>
+
+                <th>
+                    Date
+                </th>
+
+                <th>
+                    Customer
+                </th>
+
+                <th>
+                    Jewellery
+                </th>
+
+                <th>
+                    Work
+                </th>
+
+                <th>
+                    Weight Details
+                </th>
+
+                <th>
+                    Diamond Details
+                </th>
+
+                <th>
+                    टाँच
+                </th>
+
+                <th>
+                    Amount
+                </th>
+
+                <th>
+                    Status
+                </th>
+
+                <th>
+                    Action
+                </th>
 
             </tr>
 
@@ -2625,7 +3221,10 @@ def jobs():
     for r in rows:
 
         mobile = (
-            str(r["customer_mobile"] or "")
+            str(
+                r["customer_mobile"]
+                or ""
+            )
             .replace("+", "")
             .replace(" ", "")
             .replace("-", "")
@@ -2636,6 +3235,7 @@ def jobs():
         if mobile:
 
             whatsapp = f"""
+
             <a
                 class="btn small whatsapp"
                 target="_blank"
@@ -2643,7 +3243,20 @@ def jobs():
             >
                 💬 WhatsApp
             </a>
+
             """
+
+        total = (
+            float(
+                r["gross_weight"]
+                or 0
+            )
+            +
+            float(
+                r["nag_weight"]
+                or 0
+            )
+        )
 
         body += f"""
 
@@ -2659,57 +3272,119 @@ def jobs():
 
                 <td>
                     <b>
-                        {esc(r["customer_name"] or "")}
+                        {esc(
+                            r["customer_name"]
+                            or ""
+                        )}
                     </b>
                 </td>
 
                 <td>
-                    {esc(r["jewellery"])}
+                    {esc(
+                        r["jewellery"]
+                    )}
                 </td>
 
                 <td>
-                    {esc(r["work"])}
+                    {esc(
+                        r["work"]
+                    )}
                 </td>
 
                 <td>
 
                     वजन:
-                    {float(r["gross_weight"] or 0):.3f} g
+                    {float(
+                        r["gross_weight"]
+                        or 0
+                    ):.3f} g
 
                     <br>
 
                     + नग वजन:
-                    {float(r["nag_weight"] or 0):.3f} g
+                    {float(
+                        r["nag_weight"]
+                        or 0
+                    ):.3f} g
 
                     <br>
 
                     = कुल वजन:
-                    {float(r["total_weight"] or 0):.3f} g
+                    {total:.3f} g
 
                     <br>
 
                     - लॉस:
-                    {float(r["loss"] or 0):.3f} g
+                    {float(
+                        r["loss"]
+                        or 0
+                    ):.3f} g
 
                     <br>
 
                     = अंतिम वजन:
-                    {float(r["final_weight"] or 0):.3f} g
+                    {float(
+                        r["final_weight"]
+                        or 0
+                    ):.3f} g
 
                 </td>
 
                 <td>
-                    {esc(r["taanch"] or "")}
+
+                    डायमंड वजन:
+                    {float(
+                        r["diamond_weight"]
+                        or 0
+                    ):.3f} g
+
+                    <br>
+
+                    डायमंड गिनती:
+                    {int(
+                        r["diamond_count"]
+                        or 0
+                    )}
+
+                    <br>
+
+                    फैंसी डायमंड:
+                    {esc(
+                        r["fancy_diamond"]
+                        or ""
+                    )}
+
+                    <br>
+
+                    टच वजन:
+                    {float(
+                        r["touch_weight"]
+                        or 0
+                    ):.3f} g
+
                 </td>
 
                 <td>
-                    {money(r["work_amount"])}
+                    {esc(
+                        r["taanch"]
+                        or ""
+                    )}
+                </td>
+
+                <td>
+                    {money(
+                        r["work_amount"]
+                    )}
                 </td>
 
                 <td>
 
-                    <span class="badge yellow">
-                        {esc(r["status"])}
+                    <span
+                        class="badge yellow"
+                    >
+                        {esc(
+                            r["status"]
+                        )}
                     </span>
 
                 </td>
@@ -2769,6 +3444,7 @@ def jobs():
 
     </div>
 
+
     <script>
 
     function calculateWeight(){
@@ -2776,7 +3452,7 @@ def jobs():
         const weight =
             parseFloat(
                 document.getElementById(
-                    "gross_weight"
+                    "weight"
                 ).value
             ) || 0;
 
@@ -2814,6 +3490,7 @@ def jobs():
             finalWeight.toFixed(3);
     }
 
+
     document.addEventListener(
         "DOMContentLoaded",
         calculateWeight
@@ -2850,6 +3527,7 @@ def delete_job(job_id):
     )
 
     con.commit()
+
     con.close()
 
     flash(
@@ -2886,7 +3564,7 @@ def payments():
                 )
             )
 
-            date = request.form.get(
+            date_value = request.form.get(
                 "date",
                 ""
             ).strip()
@@ -2906,11 +3584,13 @@ def payments():
             ).strip()
 
             if customer_id <= 0:
+
                 raise ValueError(
                     "Customer select karo."
                 )
 
             if amount <= 0:
+
                 raise ValueError(
                     "Payment amount 0 se bada hona chahiye."
                 )
@@ -2930,7 +3610,7 @@ def payments():
                 """,
                 (
                     customer_id,
-                    date,
+                    date_value,
                     amount,
                     mode,
                     note,
@@ -2962,7 +3642,9 @@ def payments():
 
     customers_rows = con.execute(
         """
-        SELECT id,name
+        SELECT
+            id,
+            name
         FROM customers
         WHERE active=1
         ORDER BY name
@@ -2972,11 +3654,16 @@ def payments():
     rows = con.execute(
         """
         SELECT
+
             p.*,
+
             c.name AS customer_name
+
         FROM payments p
+
         JOIN customers c
             ON c.id=p.customer_id
+
         ORDER BY
             p.date DESC,
             p.id DESC
@@ -3002,7 +3689,10 @@ def payments():
             <div class="form">
 
                 <div>
-                    <label>Customer</label>
+
+                    <label>
+                        Customer
+                    </label>
 
                     <select
                         name="customer_id"
@@ -3015,17 +3705,23 @@ def payments():
 
                         {% for c in customers_rows %}
 
-                        <option value="{{ c['id'] }}">
+                        <option
+                            value="{{ c['id'] }}"
+                        >
                             {{ c['name'] }}
                         </option>
 
                         {% endfor %}
 
                     </select>
+
                 </div>
 
                 <div>
-                    <label>Date</label>
+
+                    <label>
+                        Date
+                    </label>
 
                     <input
                         type="date"
@@ -3033,10 +3729,14 @@ def payments():
                         value="{{ today }}"
                         required
                     >
+
                 </div>
 
                 <div>
-                    <label>Amount</label>
+
+                    <label>
+                        Amount
+                    </label>
 
                     <input
                         type="number"
@@ -3045,28 +3745,50 @@ def payments():
                         min="0.01"
                         required
                     >
+
                 </div>
 
                 <div>
-                    <label>Mode</label>
 
-                    <select name="mode">
+                    <label>
+                        Mode
+                    </label>
 
-                        <option>Cash</option>
-                        <option>UPI</option>
-                        <option>Bank</option>
-                        <option>Cheque</option>
+                    <select
+                        name="mode"
+                    >
+
+                        <option>
+                            Cash
+                        </option>
+
+                        <option>
+                            UPI
+                        </option>
+
+                        <option>
+                            Bank
+                        </option>
+
+                        <option>
+                            Cheque
+                        </option>
 
                     </select>
+
                 </div>
 
                 <div>
-                    <label>Note</label>
+
+                    <label>
+                        Note
+                    </label>
 
                     <input
                         name="note"
                         placeholder="Payment note"
                     >
+
                 </div>
 
             </div>
@@ -3096,12 +3818,29 @@ def payments():
 
             <tr>
 
-                <th>ID</th>
-                <th>Date</th>
-                <th>Customer</th>
-                <th>Amount</th>
-                <th>Mode</th>
-                <th>Note</th>
+                <th>
+                    ID
+                </th>
+
+                <th>
+                    Date
+                </th>
+
+                <th>
+                    Customer
+                </th>
+
+                <th>
+                    Amount
+                </th>
+
+                <th>
+                    Mode
+                </th>
+
+                <th>
+                    Note
+                </th>
 
             </tr>
 
@@ -3124,7 +3863,11 @@ def payments():
                 </td>
 
                 <td class="credit">
-                    ₹ {{ "%.2f"|format(r["amount"] or 0) }}
+                    ₹ {{
+                        "%.2f"|format(
+                            r["amount"] or 0
+                        )
+                    }}
                 </td>
 
                 <td>
@@ -3140,9 +3883,11 @@ def payments():
             {% else %}
 
             <tr>
+
                 <td colspan="6">
                     No payments yet.
                 </td>
+
             </tr>
 
             {% endfor %}
@@ -3184,7 +3929,9 @@ def ledger():
 
     customers_rows = con.execute(
         """
-        SELECT id,name
+        SELECT
+            id,
+            name
         FROM customers
         WHERE active=1
         ORDER BY name
@@ -3317,36 +4064,82 @@ def ledger():
 
     if selected:
 
+        mobile = (
+            str(
+                selected["mobile"]
+                or ""
+            )
+            .replace("+", "")
+            .replace(" ", "")
+            .replace("-", "")
+        )
+
+        whatsapp_button = ""
+
+        if mobile:
+
+            whatsapp_button = f"""
+
+            <a
+                class="btn whatsapp"
+                target="_blank"
+                href="https://wa.me/{mobile}"
+            >
+                💬 WHATSAPP
+            </a>
+
+            """
+
         body += f"""
 
         <div class="cardbox">
 
             <div class="card">
-                <h3>CUSTOMER</h3>
+
+                <h3>
+                    CUSTOMER
+                </h3>
+
                 <b>
                     {esc(customer_name)}
                 </b>
+
             </div>
 
             <div class="card">
-                <h3>TOTAL KAAM</h3>
+
+                <h3>
+                    TOTAL KAAM
+                </h3>
+
                 <b>
                     {money(total_work)}
                 </b>
+
             </div>
 
             <div class="card">
-                <h3>TOTAL PAID</h3>
+
+                <h3>
+                    TOTAL PAID
+                </h3>
+
                 <b class="credit">
                     {money(total_paid)}
                 </b>
+
             </div>
 
             <div class="card">
-                <h3>BAAKI</h3>
+
+                <h3>
+                    BAAKI
+                </h3>
+
                 <b class="debit">
                     {money(balance)}
                 </b>
+
             </div>
 
         </div>
@@ -3372,19 +4165,7 @@ def ledger():
                     🖨️ PRINT
                 </button>
 
-                {
-                    f'''
-                    <a
-                        class="btn whatsapp"
-                        target="_blank"
-                        href="https://wa.me/{str(selected["mobile"] or "").replace("+","").replace(" ","").replace("-","")}"
-                    >
-                        💬 WHATSAPP
-                    </a>
-                    '''
-                    if selected["mobile"]
-                    else ""
-                }
+                {whatsapp_button}
 
             </div>
 
@@ -3400,11 +4181,29 @@ def ledger():
 
                 <tr>
 
-                    <th>Date</th>
-                    <th>Jewellery</th>
-                    <th>Work</th>
-                    <th>Final Weight</th>
-                    <th>Amount</th>
+                    <th>
+                        Date
+                    </th>
+
+                    <th>
+                        Jewellery
+                    </th>
+
+                    <th>
+                        Work
+                    </th>
+
+                    <th>
+                        Final Weight
+                    </th>
+
+                    <th>
+                        Diamond
+                    </th>
+
+                    <th>
+                        Amount
+                    </th>
 
                 </tr>
 
@@ -3429,11 +4228,40 @@ def ledger():
                     </td>
 
                     <td>
-                        {float(j["final_weight"] or 0):.3f} g
+                        {float(
+                            j["final_weight"]
+                            or 0
+                        ):.3f} g
+                    </td>
+
+                    <td>
+
+                        {float(
+                            j["diamond_weight"]
+                            or 0
+                        ):.3f} g
+
+                        <br>
+
+                        Ginti:
+                        {int(
+                            j["diamond_count"]
+                            or 0
+                        )}
+
+                        <br>
+
+                        {esc(
+                            j["fancy_diamond"]
+                            or ""
+                        )}
+
                     </td>
 
                     <td class="debit">
-                        {money(j["work_amount"])}
+                        {money(
+                            j["work_amount"]
+                        )}
                     </td>
 
                 </tr>
@@ -3458,10 +4286,21 @@ def ledger():
 
                 <tr>
 
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Mode</th>
-                    <th>Note</th>
+                    <th>
+                        Date
+                    </th>
+
+                    <th>
+                        Amount
+                    </th>
+
+                    <th>
+                        Mode
+                    </th>
+
+                    <th>
+                        Note
+                    </th>
 
                 </tr>
 
@@ -3478,15 +4317,21 @@ def ledger():
                     </td>
 
                     <td class="credit">
-                        {money(p["amount"])}
+                        {money(
+                            p["amount"]
+                        )}
                     </td>
 
                     <td>
-                        {esc(p["mode"])}
+                        {esc(
+                            p["mode"]
+                        )}
                     </td>
 
                     <td>
-                        {esc(p["note"])}
+                        {esc(
+                            p["note"]
+                        )}
                     </td>
 
                 </tr>
@@ -3625,7 +4470,9 @@ def ledger_pdf(customer_id):
         parent=styles["Title"],
         alignment=TA_CENTER,
         fontSize=22,
-        textColor=colors.HexColor("#8A5A00"),
+        textColor=colors.HexColor(
+            "#8A5A00"
+        ),
         spaceAfter=8
     )
 
@@ -3652,32 +4499,54 @@ def ledger_pdf(customer_id):
                 parent=styles["Normal"],
                 alignment=TA_CENTER,
                 fontSize=10,
-                textColor=colors.HexColor("#5A3718")
+                textColor=colors.HexColor(
+                    "#5A3718"
+                )
             )
         )
     )
 
-    story.append(Spacer(1, 15))
+    story.append(
+        Spacer(1,15)
+    )
 
     customer_info = [
         [
-            Paragraph("<b>Customer</b>", normal),
+            Paragraph(
+                "<b>Customer</b>",
+                normal
+            ),
+
             Paragraph(
                 esc(customer["name"]),
                 normal
             )
         ],
+
         [
-            Paragraph("<b>Mobile</b>", normal),
             Paragraph(
-                esc(customer["mobile"]),
+                "<b>Mobile</b>",
+                normal
+            ),
+
+            Paragraph(
+                esc(
+                    customer["mobile"]
+                ),
                 normal
             )
         ],
+
         [
-            Paragraph("<b>Address</b>", normal),
             Paragraph(
-                esc(customer["address"]),
+                "<b>Address</b>",
+                normal
+            ),
+
+            Paragraph(
+                esc(
+                    customer["address"]
+                ),
                 normal
             )
         ]
@@ -3685,7 +4554,10 @@ def ledger_pdf(customer_id):
 
     t = Table(
         customer_info,
-        colWidths=[100, 400]
+        colWidths=[
+            100,
+            400
+        ]
     )
 
     t.setStyle(
@@ -3694,22 +4566,31 @@ def ledger_pdf(customer_id):
                 "BACKGROUND",
                 (0,0),
                 (0,-1),
-                colors.HexColor("#F7D77A")
+                colors.HexColor(
+                    "#F7D77A"
+                )
             ),
+
             (
                 "BOX",
                 (0,0),
                 (-1,-1),
                 1,
-                colors.HexColor("#B98920")
+                colors.HexColor(
+                    "#B98920"
+                )
             ),
+
             (
                 "INNERGRID",
                 (0,0),
                 (-1,-1),
                 .5,
-                colors.HexColor("#DDC27B")
+                colors.HexColor(
+                    "#DDC27B"
+                )
             ),
+
             (
                 "VALIGN",
                 (0,0),
@@ -3721,17 +4602,33 @@ def ledger_pdf(customer_id):
 
     story.append(t)
 
-    story.append(Spacer(1, 15))
+    story.append(
+        Spacer(1,15)
+    )
 
     summary = [
-        ["Total Kaam", money(total_work)],
-        ["Total Paid", money(total_paid)],
-        ["Baaki", money(balance)]
+        [
+            "Total Kaam",
+            money(total_work)
+        ],
+
+        [
+            "Total Paid",
+            money(total_paid)
+        ],
+
+        [
+            "Baaki",
+            money(balance)
+        ]
     ]
 
     st = Table(
         summary,
-        colWidths=[160, 160]
+        colWidths=[
+            160,
+            160
+        ]
     )
 
     st.setStyle(
@@ -3740,34 +4637,49 @@ def ledger_pdf(customer_id):
                 "BACKGROUND",
                 (0,0),
                 (0,-1),
-                colors.HexColor("#3D210F")
+                colors.HexColor(
+                    "#3D210F"
+                )
             ),
+
             (
                 "TEXTCOLOR",
                 (0,0),
                 (0,-1),
-                colors.HexColor("#FFE69B")
+                colors.HexColor(
+                    "#FFE69B"
+                )
             ),
+
             (
                 "BACKGROUND",
                 (1,0),
                 (1,-1),
-                colors.HexColor("#FFF5D5")
+                colors.HexColor(
+                    "#FFF5D5"
+                )
             ),
+
             (
                 "BOX",
                 (0,0),
                 (-1,-1),
                 1,
-                colors.HexColor("#B98920")
+                colors.HexColor(
+                    "#B98920"
+                )
             ),
+
             (
                 "INNERGRID",
                 (0,0),
                 (-1,-1),
                 .5,
-                colors.HexColor("#DDC27B")
+                colors.HexColor(
+                    "#DDC27B"
+                )
             ),
+
             (
                 "ALIGN",
                 (1,0),
@@ -3779,37 +4691,74 @@ def ledger_pdf(customer_id):
 
     story.append(st)
 
-    story.append(Spacer(1, 18))
+    story.append(
+        Spacer(1,18)
+    )
 
     story.append(
         Paragraph(
             "JOB ENTRIES",
             ParagraphStyle(
-                "h",
+                "job_heading",
                 parent=styles["Heading2"],
-                textColor=colors.HexColor("#8A5A00")
+                textColor=colors.HexColor(
+                    "#8A5A00"
+                )
             )
         )
     )
 
     job_data = [
+
         [
             "Date",
             "Jewellery",
             "Work",
             "Final Weight",
+            "Diamond",
             "Amount"
         ]
+
     ]
 
     for j in jobs_rows:
 
+        diamond_text = (
+            f'{float(j["diamond_weight"] or 0):.3f} g\n'
+            f'Ginti: {int(j["diamond_count"] or 0)}\n'
+            f'{str(j["fancy_diamond"] or "")}'
+        )
+
         job_data.append([
-            str(j["date"] or ""),
-            str(j["jewellery"] or ""),
-            str(j["work"] or ""),
-            f'{float(j["final_weight"] or 0):.3f} g',
-            money(j["work_amount"])
+
+            str(
+                j["date"]
+                or ""
+            ),
+
+            str(
+                j["jewellery"]
+                or ""
+            ),
+
+            str(
+                j["work"]
+                or ""
+            ),
+
+            (
+                f'{float(
+                    j["final_weight"]
+                    or 0
+                ):.3f} g'
+            ),
+
+            diamond_text,
+
+            money(
+                j["work_amount"]
+            )
+
         ])
 
     if len(job_data) == 1:
@@ -3819,6 +4768,7 @@ def ledger_pdf(customer_id):
             "No jobs",
             "-",
             "-",
+            "-",
             "-"
         ])
 
@@ -3826,84 +4776,127 @@ def ledger_pdf(customer_id):
         job_data,
         repeatRows=1,
         colWidths=[
-            70,
-            110,
-            100,
+            55,
             90,
-            90
+            75,
+            75,
+            120,
+            75
         ]
     )
 
     jt.setStyle(
         TableStyle([
+
             (
                 "BACKGROUND",
                 (0,0),
                 (-1,0),
-                colors.HexColor("#4A2915")
+                colors.HexColor(
+                    "#4A2915"
+                )
             ),
+
             (
                 "TEXTCOLOR",
                 (0,0),
                 (-1,0),
-                colors.HexColor("#FFE69B")
+                colors.HexColor(
+                    "#FFE69B"
+                )
             ),
+
             (
                 "GRID",
                 (0,0),
                 (-1,-1),
                 .5,
-                colors.HexColor("#D8C08B")
+                colors.HexColor(
+                    "#D8C08B"
+                )
             ),
+
             (
                 "ROWBACKGROUNDS",
                 (0,1),
                 (-1,-1),
                 [
                     colors.white,
-                    colors.HexColor("#FFF8E6")
+                    colors.HexColor(
+                        "#FFF8E6"
+                    )
                 ]
             ),
+
             (
                 "VALIGN",
                 (0,0),
                 (-1,-1),
                 "TOP"
+            ),
+
+            (
+                "FONTSIZE",
+                (0,0),
+                (-1,-1),
+                7
             )
         ])
     )
 
     story.append(jt)
 
-    story.append(Spacer(1, 18))
+    story.append(
+        Spacer(1,18)
+    )
 
     story.append(
         Paragraph(
             "PAYMENTS",
             ParagraphStyle(
-                "h2",
+                "payment_heading",
                 parent=styles["Heading2"],
-                textColor=colors.HexColor("#8A5A00")
+                textColor=colors.HexColor(
+                    "#8A5A00"
+                )
             )
         )
     )
 
     payment_data = [
+
         [
             "Date",
             "Amount",
             "Mode",
             "Note"
         ]
+
     ]
 
     for p in payment_rows:
 
         payment_data.append([
-            str(p["date"] or ""),
-            money(p["amount"]),
-            str(p["mode"] or ""),
-            str(p["note"] or "")
+
+            str(
+                p["date"]
+                or ""
+            ),
+
+            money(
+                p["amount"]
+            ),
+
+            str(
+                p["mode"]
+                or ""
+            ),
+
+            str(
+                p["note"]
+                or ""
+            )
+
         ])
 
     if len(payment_data) == 1:
@@ -3928,32 +4921,42 @@ def ledger_pdf(customer_id):
 
     pt.setStyle(
         TableStyle([
+
             (
                 "BACKGROUND",
                 (0,0),
                 (-1,0),
-                colors.HexColor("#17663C")
+                colors.HexColor(
+                    "#17663C"
+                )
             ),
+
             (
                 "TEXTCOLOR",
                 (0,0),
                 (-1,0),
                 colors.white
             ),
+
             (
                 "GRID",
                 (0,0),
                 (-1,-1),
                 .5,
-                colors.HexColor("#B7D7C4")
+                colors.HexColor(
+                    "#B7D7C4"
+                )
             ),
+
             (
                 "ROWBACKGROUNDS",
                 (0,1),
                 (-1,-1),
                 [
                     colors.white,
-                    colors.HexColor("#F0FFF6")
+                    colors.HexColor(
+                        "#F0FFF6"
+                    )
                 ]
             )
         ])
@@ -3961,7 +4964,9 @@ def ledger_pdf(customer_id):
 
     story.append(pt)
 
-    story.append(Spacer(1, 20))
+    story.append(
+        Spacer(1,20)
+    )
 
     story.append(
         Paragraph(
@@ -3971,7 +4976,9 @@ def ledger_pdf(customer_id):
                 parent=styles["Normal"],
                 alignment=TA_CENTER,
                 fontSize=9,
-                textColor=colors.HexColor("#8A5A00")
+                textColor=colors.HexColor(
+                    "#8A5A00"
+                )
             )
         )
     )
@@ -3981,9 +4988,11 @@ def ledger_pdf(customer_id):
     output.seek(0)
 
     safe_name = (
-        str(customer["name"])
-        .replace(" ", "_")
-        .replace("/", "_")
+        str(
+            customer["name"]
+        )
+        .replace(" ","_")
+        .replace("/","_")
     )
 
     return send_file(
@@ -4017,14 +5026,18 @@ def search():
             """
             SELECT *
             FROM customers
+
             WHERE active=1
+
             AND (
                 name LIKE ?
                 OR mobile LIKE ?
                 OR address LIKE ?
             )
+
             ORDER BY name
             """,
+
             (
                 f"%{q}%",
                 f"%{q}%",
@@ -4035,21 +5048,27 @@ def search():
         jobs_rows = con.execute(
             """
             SELECT
+
                 j.*,
+
                 c.name AS customer_name
+
             FROM jobs j
+
             LEFT JOIN customers c
                 ON c.id=j.customer_id
+
             WHERE
+
                 c.name LIKE ?
                 OR j.jewellery LIKE ?
                 OR j.work LIKE ?
-                OR j.maal_aaya LIKE ?
-                OR j.maal_diyaa LIKE ?
+                OR j.fancy_diamond LIKE ?
+
             ORDER BY j.id DESC
             """,
+
             (
-                f"%{q}%",
                 f"%{q}%",
                 f"%{q}%",
                 f"%{q}%",
@@ -4112,10 +5131,23 @@ def search():
             <table>
 
                 <tr>
-                    <th>Name</th>
-                    <th>Mobile</th>
-                    <th>Address</th>
-                    <th>Action</th>
+
+                    <th>
+                        Name
+                    </th>
+
+                    <th>
+                        Mobile
+                    </th>
+
+                    <th>
+                        Address
+                    </th>
+
+                    <th>
+                        Action
+                    </th>
+
                 </tr>
 
         """
@@ -4178,12 +5210,33 @@ def search():
 
                 <tr>
 
-                    <th>Date</th>
-                    <th>Customer</th>
-                    <th>Jewellery</th>
-                    <th>Work</th>
-                    <th>Weight</th>
-                    <th>Amount</th>
+                    <th>
+                        Date
+                    </th>
+
+                    <th>
+                        Customer
+                    </th>
+
+                    <th>
+                        Jewellery
+                    </th>
+
+                    <th>
+                        Work
+                    </th>
+
+                    <th>
+                        Final Weight
+                    </th>
+
+                    <th>
+                        Diamond
+                    </th>
+
+                    <th>
+                        Amount
+                    </th>
 
                 </tr>
 
@@ -4196,27 +5249,58 @@ def search():
                 <tr>
 
                     <td>
-                        {esc(j["date"])}
+                        {esc(
+                            j["date"]
+                        )}
                     </td>
 
                     <td>
-                        {esc(j["customer_name"] or "")}
+                        {esc(
+                            j["customer_name"]
+                            or ""
+                        )}
                     </td>
 
                     <td>
-                        {esc(j["jewellery"])}
+                        {esc(
+                            j["jewellery"]
+                        )}
                     </td>
 
                     <td>
-                        {esc(j["work"])}
+                        {esc(
+                            j["work"]
+                        )}
                     </td>
 
                     <td>
-                        {float(j["final_weight"] or 0):.3f} g
+                        {float(
+                            j["final_weight"]
+                            or 0
+                        ):.3f} g
                     </td>
 
                     <td>
-                        {money(j["work_amount"])}
+
+                        {float(
+                            j["diamond_weight"]
+                            or 0
+                        ):.3f} g
+
+                        <br>
+
+                        Ginti:
+                        {int(
+                            j["diamond_count"]
+                            or 0
+                        )}
+
+                    </td>
+
+                    <td>
+                        {money(
+                            j["work_amount"]
+                        )}
                     </td>
 
                 </tr>
@@ -4264,13 +5348,37 @@ def reports():
     con = db()
 
     jobs_count = con.execute(
-        "SELECT COUNT(*) FROM jobs"
+        """
+        SELECT COUNT(*)
+        FROM jobs
+        """
     ).fetchone()[0]
 
     total_weight = con.execute(
         """
         SELECT COALESCE(
-            SUM(final_weight),0
+            SUM(final_weight),
+            0
+        )
+        FROM jobs
+        """
+    ).fetchone()[0]
+
+    total_diamond_weight = con.execute(
+        """
+        SELECT COALESCE(
+            SUM(diamond_weight),
+            0
+        )
+        FROM jobs
+        """
+    ).fetchone()[0]
+
+    total_diamond_count = con.execute(
+        """
+        SELECT COALESCE(
+            SUM(diamond_count),
+            0
         )
         FROM jobs
         """
@@ -4279,7 +5387,8 @@ def reports():
     total_work = con.execute(
         """
         SELECT COALESCE(
-            SUM(work_amount),0
+            SUM(work_amount),
+            0
         )
         FROM jobs
         """
@@ -4288,7 +5397,8 @@ def reports():
     total_paid = con.execute(
         """
         SELECT COALESCE(
-            SUM(amount),0
+            SUM(amount),
+            0
         )
         FROM payments
         """
@@ -4311,29 +5421,86 @@ def reports():
     <div class="cardbox">
 
         <div class="card">
-            <h3>TOTAL JOBS</h3>
-            <b>{jobs_count}</b>
-        </div>
 
-        <div class="card">
-            <h3>TOTAL FINAL WEIGHT</h3>
+            <h3>
+                TOTAL JOBS
+            </h3>
+
             <b>
-                {float(total_weight):.3f} g
+                {jobs_count}
             </b>
+
         </div>
 
         <div class="card">
-            <h3>TOTAL WORK</h3>
+
+            <h3>
+                TOTAL FINAL WEIGHT
+            </h3>
+
+            <b>
+                {float(
+                    total_weight
+                ):.3f} g
+            </b>
+
+        </div>
+
+        <div class="card">
+
+            <h3>
+                DIAMOND WEIGHT
+            </h3>
+
+            <b>
+                {float(
+                    total_diamond_weight
+                ):.3f} g
+            </b>
+
+        </div>
+
+        <div class="card">
+
+            <h3>
+                DIAMOND GINTI
+            </h3>
+
+            <b>
+                {int(
+                    total_diamond_count
+                    or 0
+                )}
+            </b>
+
+        </div>
+
+    </div>
+
+    <div class="cardbox">
+
+        <div class="card">
+
+            <h3>
+                TOTAL WORK
+            </h3>
+
             <b>
                 {money(total_work)}
             </b>
+
         </div>
 
         <div class="card">
-            <h3>TOTAL PAID</h3>
+
+            <h3>
+                TOTAL PAID
+            </h3>
+
             <b class="credit">
                 {money(total_paid)}
             </b>
+
         </div>
 
     </div>
@@ -4422,25 +5589,45 @@ def about():
 
         <p>
             Customer management, jewellery job,
-            automatic weight calculation, payment,
-            ledger, reports aur PDF system.
+            automatic weight calculation, diamond details,
+            payment, ledger, reports aur PDF system.
         </p>
 
         <hr>
 
         <p>
-            <b>Shop:</b>
+            <b>
+                Shop:
+            </b>
             R.K JEWELERS
         </p>
 
         <p>
-            <b>Developer:</b>
+            <b>
+                Developer:
+            </b>
             KRISHNA
         </p>
 
         <p>
-            <b>Version:</b>
+            <b>
+                Version:
+            </b>
             R.K JEWELERS PRO 2026
+        </p>
+
+        <p>
+            <b>
+                Weight Formula:
+            </b>
+            वजन + नग वजन = कुल वजन
+        </p>
+
+        <p>
+            <b>
+                Final Formula:
+            </b>
+            कुल वजन - लॉस = अंतिम वजन
         </p>
 
     </div>
@@ -4470,21 +5657,46 @@ def dashboard():
 # START
 # ============================================================
 
+# IMPORTANT:
+# Gunicorn/Render ke case me bhi database initialize hoga.
+ensure_database()
+
+
 if __name__ == "__main__":
 
-    setup()
+    print("=" * 55)
+
+    print(
+        "             R.K JEWELERS PRO"
+    )
 
     print("=" * 55)
-    print("             R.K JEWELERS PRO")
-    print("=" * 55)
-    print("Developer : KRISHNA")
-    print("URL       : http://127.0.0.1:5000")
-    print("Username  : admin")
-    print("Password  : 1234")
+
+    print(
+        "Developer : KRISHNA"
+    )
+
+    print(
+        "URL       : http://127.0.0.1:5000"
+    )
+
+    print(
+        "Username  : admin"
+    )
+
+    print(
+        "Password  : 1234"
+    )
+
     print("=" * 55)
 
     app.run(
         host="0.0.0.0",
-        port=5000,
+        port=int(
+            os.environ.get(
+                "PORT",
+                5000
+            )
+        ),
         debug=False
     )
