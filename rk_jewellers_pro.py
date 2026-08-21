@@ -63,6 +63,27 @@ app.secret_key = (
     os.environ.get("RK_SECRET_KEY")
     or os.urandom(32)
 )
+# ============================================================
+# PDF HINDI FONT
+# ============================================================
+
+PDF_FONT = "RkDevanagari"
+
+FONT_PATH = APP_DIR / "NotoSansDevanagari-Regular.ttf"
+
+if not FONT_PATH.exists():
+
+    raise RuntimeError(
+        "NotoSansDevanagari-Regular.ttf "
+        "rk_jewellers_pro.py ke same folder me nahi hai."
+    )
+
+pdfmetrics.registerFont(
+    TTFont(
+        "RkDevanagari",
+        str(FONT_PATH)
+    )
+)
 
 
 # ============================================================
