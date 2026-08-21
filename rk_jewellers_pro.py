@@ -39,7 +39,8 @@ from reportlab.platypus import (
     Paragraph,
     Spacer,
     Table,
-    TableStyle
+    TableStyle,
+    KeepTogether
 )
 
 # ============================================================
@@ -83,7 +84,11 @@ ADMIN_PASSWORD_HASH = generate_password_hash(
 # ============================================================
 
 def db():
-    con = sqlite3.connect(DB)
+
+    con = sqlite3.connect(
+        DB,
+        timeout=30
+    )
 
     con.row_factory = sqlite3.Row
 
@@ -307,8 +312,8 @@ def setup():
         "TEXT NOT NULL DEFAULT 'Pending'"
     )
 
-    # Legacy columns kept for old database compatibility.
-    # They are NOT shown in the UI.
+    # Legacy columns kept only for old database compatibility.
+    # They are NOT used in the current UI/calculation.
 
     add_column(
         "jobs",
@@ -382,6 +387,7 @@ def setup():
         "TEXT DEFAULT ''"
     )
 
+    # Old columns are intentionally retained but not displayed.
     add_column(
         "jobs",
         "touch_weight",
@@ -394,6 +400,7 @@ def setup():
         "INTEGER DEFAULT 1"
     )
 
+    # Old column retained only for old database compatibility.
     add_column(
         "jobs",
         "taanch",
@@ -440,24 +447,18 @@ def setup():
         "TEXT"
     )
 
+    # ========================================================
+    # COMMIT
+    # ========================================================
+
     con.commit()
+
     con.close()
 
 
 def ensure_database():
 
-    try:
-
-        setup()
-
-    except Exception as e:
-
-        print(
-            "DATABASE INITIALIZATION ERROR:",
-            e
-        )
-
-        raise
+    setup()
 
 
 @app.before_request
@@ -474,19 +475,25 @@ def money(value):
 
     try:
 
-        value = float(value or 0)
+        value = float(
+            value or 0
+        )
 
     except Exception:
 
         value = 0
 
-    return "₹ {:,.2f}".format(value)
+    return "₹ {:,.2f}".format(
+        value
+    )
 
 
 def esc(value):
 
     return html.escape(
-        "" if value is None else str(value)
+        ""
+        if value is None
+        else str(value)
     )
 
 
@@ -976,7 +983,7 @@ table{
 
     border-collapse:collapse;
 
-    min-width:950px;
+    min-width:1000px;
 }
 
 th{
@@ -1598,7 +1605,8 @@ def home():
     total_work = con.execute(
         """
         SELECT COALESCE(
-            SUM(work_amount),0
+            SUM(work_amount),
+            0
         )
         FROM jobs
         """
@@ -1607,7 +1615,8 @@ def home():
     total_paid = con.execute(
         """
         SELECT COALESCE(
-            SUM(amount),0
+            SUM(amount),
+            0
         )
         FROM payments
         """
@@ -1764,8 +1773,9 @@ def home():
 
         <p>
             Jewellery job work, customer ledger,
-            payments, automatic weight calculation
-            aur colourful PDF reports ek hi system me.
+            payments, automatic weight calculation,
+            diamond details aur colourful PDF reports
+            ek hi system me.
         </p>
 
         <p>
@@ -2286,9 +2296,9 @@ def jobs():
                 "Pending"
             ).strip()
 
-            # ================================================
-            # JEWELLERY WEIGHT
-            # ================================================
+            # =================================================
+            # WEIGHT DETAILS
+            # =================================================
 
             weight = parse_float(
                 "weight"
@@ -2300,6 +2310,10 @@ def jobs():
 
             loss = parse_float(
                 "loss"
+            )
+
+            stone_weight = parse_float(
+                "stone_weight"
             )
 
             diamond_weight = parse_float(
@@ -2316,19 +2330,10 @@ def jobs():
                 ""
             ).strip()
 
-            touch_weight = parse_float(
-                "touch_weight"
-            )
-
             quantity = parse_int(
                 "quantity",
                 1
             )
-
-            taanch = request.form.get(
-                "taanch",
-                ""
-            ).strip()
 
             work_amount = parse_float(
                 "work_amount"
@@ -2339,21 +2344,34 @@ def jobs():
                 ""
             ).strip()
 
-            # ================================================
+            # =================================================
             # AUTOMATIC CALCULATION
+            # =================================================
+            #
             # वजन + नग वजन = कुल वजन
             # कुल वजन - लॉस = अंतिम वजन
-            # ================================================
+            # अंतिम वजन - पत्थर वजन = नेट वजन
+            #
+            # =================================================
 
             total_weight = (
                 weight +
                 nag_weight
             )
 
-            final_weight = (
-                total_weight -
-                loss
+            final_weight = max(
+                0,
+                total_weight - loss
             )
+
+            net_weight = max(
+                0,
+                final_weight - stone_weight
+            )
+
+            # =================================================
+            # VALIDATION
+            # =================================================
 
             if customer_id <= 0:
 
@@ -2391,10 +2409,10 @@ def jobs():
                     "लॉस negative nahi ho sakta."
                 )
 
-            if final_weight < 0:
+            if stone_weight < 0:
 
                 raise ValueError(
-                    "अंतिम वजन negative nahi ho sakta."
+                    "पत्थर वजन negative nahi ho sakta."
                 )
 
             if diamond_weight < 0:
@@ -2409,12 +2427,6 @@ def jobs():
                     "डायमंड गिनती negative nahi ho sakti."
                 )
 
-            if touch_weight < 0:
-
-                raise ValueError(
-                    "टच वजन negative nahi ho sakta."
-                )
-
             if quantity < 1:
 
                 raise ValueError(
@@ -2426,6 +2438,10 @@ def jobs():
                 raise ValueError(
                     "Amount negative nahi ho sakta."
                 )
+
+            # =================================================
+            # UPDATE
+            # =================================================
 
             if edit_id:
 
@@ -2445,16 +2461,14 @@ def jobs():
                         total_weight=?,
                         loss=?,
                         final_weight=?,
-
+                        stone_weight=?,
                         net_weight=?,
 
                         diamond_weight=?,
                         diamond_count=?,
                         fancy_diamond=?,
-                        touch_weight=?,
 
                         quantity=?,
-                        taanch=?,
                         work_amount=?,
                         notes=?
 
@@ -2472,16 +2486,14 @@ def jobs():
                         total_weight,
                         loss,
                         final_weight,
-
-                        final_weight,
+                        stone_weight,
+                        net_weight,
 
                         diamond_weight,
                         diamond_count,
                         fancy_diamond,
-                        touch_weight,
 
                         quantity,
-                        taanch,
                         work_amount,
                         notes,
 
@@ -2492,6 +2504,10 @@ def jobs():
                 message = (
                     "Job successfully update ho gayi."
                 )
+
+            # =================================================
+            # INSERT
+            # =================================================
 
             else:
 
@@ -2510,16 +2526,14 @@ def jobs():
                         total_weight,
                         loss,
                         final_weight,
-
+                        stone_weight,
                         net_weight,
 
                         diamond_weight,
                         diamond_count,
                         fancy_diamond,
-                        touch_weight,
 
                         quantity,
-                        taanch,
                         work_amount,
                         notes,
                         created_at
@@ -2532,6 +2546,7 @@ def jobs():
                         ?,
                         ?,
                         ?,
+
                         ?,
                         ?,
                         ?,
@@ -2539,10 +2554,11 @@ def jobs():
                         ?,
                         ?,
                         ?,
+
                         ?,
                         ?,
                         ?,
-                        ?,
+
                         ?,
                         ?,
                         ?,
@@ -2561,16 +2577,14 @@ def jobs():
                         total_weight,
                         loss,
                         final_weight,
-
-                        final_weight,
+                        stone_weight,
+                        net_weight,
 
                         diamond_weight,
                         diamond_count,
                         fancy_diamond,
-                        touch_weight,
 
                         quantity,
-                        taanch,
                         work_amount,
                         notes,
                         datetime.now().isoformat()
@@ -2618,9 +2632,7 @@ def jobs():
         """
         SELECT
             j.*,
-
             c.name AS customer_name,
-
             c.mobile AS customer_mobile
 
         FROM jobs j
@@ -2677,6 +2689,11 @@ def jobs():
             or 0
         )
 
+        form_stone_weight = (
+            edit_job["stone_weight"]
+            or 0
+        )
+
         form_diamond_weight = (
             edit_job["diamond_weight"]
             or 0
@@ -2692,19 +2709,9 @@ def jobs():
             or ""
         )
 
-        form_touch_weight = (
-            edit_job["touch_weight"]
-            or 0
-        )
-
         form_quantity = (
             edit_job["quantity"]
             or 1
-        )
-
-        form_taanch = (
-            edit_job["taanch"]
-            or ""
         )
 
         form_amount = (
@@ -2739,17 +2746,15 @@ def jobs():
 
         form_loss = 0
 
+        form_stone_weight = 0
+
         form_diamond_weight = 0
 
         form_diamond_count = 0
 
         form_fancy_diamond = ""
 
-        form_touch_weight = 0
-
         form_quantity = 1
-
-        form_taanch = ""
 
         form_amount = 0
 
@@ -2815,6 +2820,7 @@ def jobs():
 
             </div>
 
+
             <div>
 
                 <label>
@@ -2830,6 +2836,7 @@ def jobs():
 
             </div>
 
+
             <div>
 
                 <label>
@@ -2844,6 +2851,7 @@ def jobs():
                 >
 
             </div>
+
 
             <div>
 
@@ -2883,6 +2891,7 @@ def jobs():
 
             </div>
 
+
             <div>
 
                 <label>
@@ -2921,6 +2930,7 @@ def jobs():
 
             </div>
 
+
             <div>
 
                 <label>
@@ -2935,6 +2945,7 @@ def jobs():
                 >
 
             </div>
+
 
             <div>
 
@@ -2952,6 +2963,7 @@ def jobs():
 
             </div>
 
+
             <div>
 
                 <label>
@@ -2967,6 +2979,7 @@ def jobs():
 
             </div>
 
+
             <div>
 
                 <label>
@@ -2981,35 +2994,6 @@ def jobs():
 
             </div>
 
-            <div>
-
-                <label>
-                    टच वजन
-                </label>
-
-                <input
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    name="touch_weight"
-                    value="{form_touch_weight}"
-                >
-
-            </div>
-
-            <div>
-
-                <label>
-                    टाँच
-                </label>
-
-                <input
-                    name="taanch"
-                    value="{esc(form_taanch)}"
-                    placeholder="टाँच"
-                >
-
-            </div>
 
             <div>
 
@@ -3029,7 +3013,9 @@ def jobs():
 
         </div>
 
+
         <hr>
+
 
         <div class="weight-box">
 
@@ -3037,7 +3023,9 @@ def jobs():
                 ⚖️ वजन विवरण
             </h3>
 
+
             <div class="form">
+
 
                 <div>
 
@@ -3057,6 +3045,7 @@ def jobs():
 
                 </div>
 
+
                 <div>
 
                     <label>
@@ -3075,6 +3064,7 @@ def jobs():
 
                 </div>
 
+
                 <div>
 
                     <label>
@@ -3089,6 +3079,7 @@ def jobs():
                     >
 
                 </div>
+
 
                 <div>
 
@@ -3108,6 +3099,7 @@ def jobs():
 
                 </div>
 
+
                 <div>
 
                     <label>
@@ -3123,11 +3115,49 @@ def jobs():
 
                 </div>
 
+
+                <div>
+
+                    <label>
+                        पत्थर वजन
+                    </label>
+
+                    <input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        name="stone_weight"
+                        id="stone_weight"
+                        value="{form_stone_weight}"
+                        oninput="calculateWeight()"
+                    >
+
+                </div>
+
+
+                <div>
+
+                    <label>
+                        = नेट वजन
+                    </label>
+
+                    <input
+                        class="auto-box"
+                        type="text"
+                        id="net_weight"
+                        readonly
+                    >
+
+                </div>
+
+
             </div>
 
         </div>
 
+
         <br>
+
 
         <label>
             Notes
@@ -3138,7 +3168,9 @@ def jobs():
             placeholder="Extra notes..."
         >{esc(form_notes)}</textarea>
 
+
         <br><br>
+
 
         <button
             class="green"
@@ -3146,6 +3178,7 @@ def jobs():
         >
             💾 {button}
         </button>
+
 
         <a
             class="btn gray"
@@ -3157,6 +3190,7 @@ def jobs():
     </form>
 
     </div>
+
 
     <div class="panel">
 
@@ -3191,15 +3225,11 @@ def jobs():
                 </th>
 
                 <th>
-                    Weight Details
+                    वजन विवरण
                 </th>
 
                 <th>
-                    Diamond Details
-                </th>
-
-                <th>
-                    टाँच
+                    डायमंड विवरण
                 </th>
 
                 <th>
@@ -3245,18 +3275,6 @@ def jobs():
             </a>
 
             """
-
-        total = (
-            float(
-                r["gross_weight"]
-                or 0
-            )
-            +
-            float(
-                r["nag_weight"]
-                or 0
-            )
-        )
 
         body += f"""
 
@@ -3310,7 +3328,10 @@ def jobs():
                     <br>
 
                     = कुल वजन:
-                    {total:.3f} g
+                    {float(
+                        r["total_weight"]
+                        or 0
+                    ):.3f} g
 
                     <br>
 
@@ -3328,7 +3349,24 @@ def jobs():
                         or 0
                     ):.3f} g
 
+                    <br>
+
+                    पत्थर वजन:
+                    {float(
+                        r["stone_weight"]
+                        or 0
+                    ):.3f} g
+
+                    <br>
+
+                    = नेट वजन:
+                    {float(
+                        r["net_weight"]
+                        or 0
+                    ):.3f} g
+
                 </td>
+
 
                 <td>
 
@@ -3354,28 +3392,15 @@ def jobs():
                         or ""
                     )}
 
-                    <br>
-
-                    टच वजन:
-                    {float(
-                        r["touch_weight"]
-                        or 0
-                    ):.3f} g
-
                 </td>
 
-                <td>
-                    {esc(
-                        r["taanch"]
-                        or ""
-                    )}
-                </td>
 
                 <td>
                     {money(
                         r["work_amount"]
                     )}
                 </td>
+
 
                 <td>
 
@@ -3388,6 +3413,7 @@ def jobs():
                     </span>
 
                 </td>
+
 
                 <td>
 
@@ -3402,6 +3428,7 @@ def jobs():
                         >
                             ✏️ EDIT
                         </a>
+
 
                         <form
                             method="post"
@@ -3425,6 +3452,7 @@ def jobs():
                             </button>
 
                         </form>
+
 
                         {whatsapp}
 
@@ -3456,12 +3484,14 @@ def jobs():
                 ).value
             ) || 0;
 
+
         const nag =
             parseFloat(
                 document.getElementById(
                     "nag_weight"
                 ).value
             ) || 0;
+
 
         const loss =
             parseFloat(
@@ -3470,8 +3500,18 @@ def jobs():
                 ).value
             ) || 0;
 
+
+        const stone =
+            parseFloat(
+                document.getElementById(
+                    "stone_weight"
+                ).value
+            ) || 0;
+
+
         const total =
             weight + nag;
+
 
         const finalWeight =
             Math.max(
@@ -3479,15 +3519,31 @@ def jobs():
                 total - loss
             );
 
+
+        const netWeight =
+            Math.max(
+                0,
+                finalWeight - stone
+            );
+
+
         document.getElementById(
             "total_weight"
         ).value =
             total.toFixed(3);
 
+
         document.getElementById(
             "final_weight"
         ).value =
             finalWeight.toFixed(3);
+
+
+        document.getElementById(
+            "net_weight"
+        ).value =
+            netWeight.toFixed(3);
+
     }
 
 
@@ -3939,13 +3995,9 @@ def ledger():
     ).fetchall()
 
     selected = None
-
     jobs_rows = []
-
     payment_rows = []
-
     total_work = 0
-
     total_paid = 0
 
     if customer_id:
@@ -3984,7 +4036,8 @@ def ledger():
             total_work = con.execute(
                 """
                 SELECT COALESCE(
-                    SUM(work_amount),0
+                    SUM(work_amount),
+                    0
                 )
                 FROM jobs
                 WHERE customer_id=?
@@ -3995,7 +4048,8 @@ def ledger():
             total_paid = con.execute(
                 """
                 SELECT COALESCE(
-                    SUM(amount),0
+                    SUM(amount),
+                    0
                 )
                 FROM payments
                 WHERE customer_id=?
@@ -4194,11 +4248,11 @@ def ledger():
                     </th>
 
                     <th>
-                        Final Weight
+                        वजन विवरण
                     </th>
 
                     <th>
-                        Diamond
+                        डायमंड
                     </th>
 
                     <th>
@@ -4228,14 +4282,66 @@ def ledger():
                     </td>
 
                     <td>
+
+                        वजन:
+                        {float(
+                            j["gross_weight"]
+                            or 0
+                        ):.3f} g
+
+                        <br>
+
+                        + नग वजन:
+                        {float(
+                            j["nag_weight"]
+                            or 0
+                        ):.3f} g
+
+                        <br>
+
+                        = कुल वजन:
+                        {float(
+                            j["total_weight"]
+                            or 0
+                        ):.3f} g
+
+                        <br>
+
+                        - लॉस:
+                        {float(
+                            j["loss"]
+                            or 0
+                        ):.3f} g
+
+                        <br>
+
+                        = अंतिम वजन:
                         {float(
                             j["final_weight"]
                             or 0
                         ):.3f} g
+
+                        <br>
+
+                        पत्थर वजन:
+                        {float(
+                            j["stone_weight"]
+                            or 0
+                        ):.3f} g
+
+                        <br>
+
+                        = नेट वजन:
+                        {float(
+                            j["net_weight"]
+                            or 0
+                        ):.3f} g
+
                     </td>
 
                     <td>
 
+                        वजन:
                         {float(
                             j["diamond_weight"]
                             or 0
@@ -4243,7 +4349,7 @@ def ledger():
 
                         <br>
 
-                        Ginti:
+                        गिनती:
                         {int(
                             j["diamond_count"]
                             or 0
@@ -4251,6 +4357,7 @@ def ledger():
 
                         <br>
 
+                        फैंसी:
                         {esc(
                             j["fancy_diamond"]
                             or ""
@@ -4274,11 +4381,14 @@ def ledger():
 
             </div>
 
+
             <br>
+
 
             <h3>
                 💰 Payments
             </h3>
+
 
             <div class="table">
 
@@ -4425,7 +4535,8 @@ def ledger_pdf(customer_id):
     total_work = con.execute(
         """
         SELECT COALESCE(
-            SUM(work_amount),0
+            SUM(work_amount),
+            0
         )
         FROM jobs
         WHERE customer_id=?
@@ -4436,7 +4547,8 @@ def ledger_pdf(customer_id):
     total_paid = con.execute(
         """
         SELECT COALESCE(
-            SUM(amount),0
+            SUM(amount),
+            0
         )
         FROM payments
         WHERE customer_id=?
@@ -4457,10 +4569,10 @@ def ledger_pdf(customer_id):
     doc = SimpleDocTemplate(
         output,
         pagesize=A4,
-        rightMargin=30,
-        leftMargin=30,
-        topMargin=30,
-        bottomMargin=30
+        rightMargin=28,
+        leftMargin=28,
+        topMargin=28,
+        bottomMargin=28
     )
 
     styles = getSampleStyleSheet()
@@ -4479,10 +4591,33 @@ def ledger_pdf(customer_id):
     normal = ParagraphStyle(
         "NormalCustom",
         parent=styles["Normal"],
-        fontSize=9
+        fontSize=8.5,
+        leading=11
+    )
+
+    small = ParagraphStyle(
+        "SmallCustom",
+        parent=styles["Normal"],
+        fontSize=7.5,
+        leading=9
+    )
+
+    heading_style = ParagraphStyle(
+        "SectionHeading",
+        parent=styles["Heading2"],
+        fontSize=13,
+        textColor=colors.HexColor(
+            "#8A5A00"
+        ),
+        spaceBefore=4,
+        spaceAfter=8
     )
 
     story = []
+
+    # ========================================================
+    # PDF HEADER
+    # ========================================================
 
     story.append(
         Paragraph(
@@ -4507,10 +4642,15 @@ def ledger_pdf(customer_id):
     )
 
     story.append(
-        Spacer(1,15)
+        Spacer(1,12)
     )
 
+    # ========================================================
+    # CUSTOMER DETAILS
+    # ========================================================
+
     customer_info = [
+
         [
             Paragraph(
                 "<b>Customer</b>",
@@ -4518,7 +4658,9 @@ def ledger_pdf(customer_id):
             ),
 
             Paragraph(
-                esc(customer["name"]),
+                esc(
+                    customer["name"]
+                ),
                 normal
             )
         ],
@@ -4550,9 +4692,10 @@ def ledger_pdf(customer_id):
                 normal
             )
         ]
+
     ]
 
-    t = Table(
+    customer_table = Table(
         customer_info,
         colWidths=[
             100,
@@ -4560,8 +4703,9 @@ def ledger_pdf(customer_id):
         ]
     )
 
-    t.setStyle(
+    customer_table.setStyle(
         TableStyle([
+
             (
                 "BACKGROUND",
                 (0,0),
@@ -4597,16 +4741,24 @@ def ledger_pdf(customer_id):
                 (-1,-1),
                 "TOP"
             )
+
         ])
     )
 
-    story.append(t)
+    story.append(
+        customer_table
+    )
 
     story.append(
         Spacer(1,15)
     )
 
+    # ========================================================
+    # SUMMARY
+    # ========================================================
+
     summary = [
+
         [
             "Total Kaam",
             money(total_work)
@@ -4621,9 +4773,10 @@ def ledger_pdf(customer_id):
             "Baaki",
             money(balance)
         ]
+
     ]
 
-    st = Table(
+    summary_table = Table(
         summary,
         colWidths=[
             160,
@@ -4631,8 +4784,9 @@ def ledger_pdf(customer_id):
         ]
     )
 
-    st.setStyle(
+    summary_table.setStyle(
         TableStyle([
+
             (
                 "BACKGROUND",
                 (0,0),
@@ -4686,180 +4840,428 @@ def ledger_pdf(customer_id):
                 (1,-1),
                 "RIGHT"
             )
+
         ])
     )
 
-    story.append(st)
+    story.append(
+        summary_table
+    )
 
     story.append(
         Spacer(1,18)
     )
+
+    # ========================================================
+    # JOB ENTRIES
+    # ========================================================
 
     story.append(
         Paragraph(
             "JOB ENTRIES",
-            ParagraphStyle(
-                "job_heading",
-                parent=styles["Heading2"],
-                textColor=colors.HexColor(
-                    "#8A5A00"
-                )
-            )
+            heading_style
         )
     )
 
-    job_data = [
+    # ========================================================
+    # IMPORTANT:
+    # FULL WEIGHT DETAILS IN PDF
+    # ========================================================
 
-        [
-            "Date",
-            "Jewellery",
-            "Work",
-            "Final Weight",
-            "Diamond",
-            "Amount"
-        ]
+    for index, j in enumerate(
+        jobs_rows,
+        start=1
+    ):
 
-    ]
-
-    for j in jobs_rows:
-
-        diamond_text = (
-            f'{float(j["diamond_weight"] or 0):.3f} g\n'
-            f'Ginti: {int(j["diamond_count"] or 0)}\n'
-            f'{str(j["fancy_diamond"] or "")}'
+        total_weight = float(
+            j["total_weight"]
+            or 0
         )
 
-        job_data.append([
+        final_weight = float(
+            j["final_weight"]
+            or 0
+        )
 
-            str(
-                j["date"]
-                or ""
-            ),
+        stone_weight = float(
+            j["stone_weight"]
+            or 0
+        )
 
-            str(
-                j["jewellery"]
-                or ""
-            ),
+        net_weight = float(
+            j["net_weight"]
+            or 0
+        )
 
-            str(
-                j["work"]
-                or ""
-            ),
+        weight_rows = [
 
-            (
-                f'{float(
-                    j["final_weight"]
-                    or 0
-                ):.3f} g'
-            ),
+            [
+                Paragraph(
+                    "<b>वजन विवरण</b>",
+                    normal
+                ),
+                "",
+                Paragraph(
+                    "<b>डायमंड विवरण</b>",
+                    normal
+                ),
+                ""
+            ],
 
-            diamond_text,
+            [
+                Paragraph(
+                    "वजन",
+                    normal
+                ),
 
-            money(
-                j["work_amount"]
-            )
+                Paragraph(
+                    f'{float(j["gross_weight"] or 0):.3f} g',
+                    normal
+                ),
 
-        ])
+                Paragraph(
+                    "डायमंड वजन",
+                    normal
+                ),
 
-    if len(job_data) == 1:
+                Paragraph(
+                    f'{float(j["diamond_weight"] or 0):.3f} g',
+                    normal
+                )
+            ],
 
-        job_data.append([
-            "-",
-            "No jobs",
-            "-",
-            "-",
-            "-",
-            "-"
-        ])
+            [
+                Paragraph(
+                    "+ नग वजन",
+                    normal
+                ),
 
-    jt = Table(
-        job_data,
-        repeatRows=1,
-        colWidths=[
-            55,
-            90,
-            75,
-            75,
-            120,
-            75
+                Paragraph(
+                    f'{float(j["nag_weight"] or 0):.3f} g',
+                    normal
+                ),
+
+                Paragraph(
+                    "डायमंड गिनती",
+                    normal
+                ),
+
+                Paragraph(
+                    str(
+                        int(
+                            j["diamond_count"]
+                            or 0
+                        )
+                    ),
+                    normal
+                )
+            ],
+
+            [
+                Paragraph(
+                    "= कुल वजन",
+                    normal
+                ),
+
+                Paragraph(
+                    f'{total_weight:.3f} g',
+                    normal
+                ),
+
+                Paragraph(
+                    "फैंसी डायमंड",
+                    normal
+                ),
+
+                Paragraph(
+                    esc(
+                        j["fancy_diamond"]
+                        or ""
+                    ),
+                    normal
+                )
+            ],
+
+            [
+                Paragraph(
+                    "- लॉस",
+                    normal
+                ),
+
+                Paragraph(
+                    f'{float(j["loss"] or 0):.3f} g',
+                    normal
+                ),
+
+                Paragraph(
+                    "नग",
+                    normal
+                ),
+
+                Paragraph(
+                    str(
+                        int(
+                            j["quantity"]
+                            or 0
+                        )
+                    ),
+                    normal
+                )
+            ],
+
+            [
+                Paragraph(
+                    "= अंतिम वजन",
+                    normal
+                ),
+
+                Paragraph(
+                    f'{final_weight:.3f} g',
+                    normal
+                ),
+
+                Paragraph(
+                    "काम की रकम",
+                    normal
+                ),
+
+                Paragraph(
+                    money(
+                        j["work_amount"]
+                    ),
+                    normal
+                )
+            ],
+
+            [
+                Paragraph(
+                    "पत्थर वजन",
+                    normal
+                ),
+
+                Paragraph(
+                    f'{stone_weight:.3f} g',
+                    normal
+                ),
+
+                Paragraph(
+                    "स्टेटस",
+                    normal
+                ),
+
+                Paragraph(
+                    esc(
+                        j["status"]
+                    ),
+                    normal
+                )
+            ],
+
+            [
+                Paragraph(
+                    "= नेट वजन",
+                    normal
+                ),
+
+                Paragraph(
+                    f'{net_weight:.3f} g',
+                    normal
+                ),
+
+                Paragraph(
+                    "Jewellery",
+                    normal
+                ),
+
+                Paragraph(
+                    esc(
+                        j["jewellery"]
+                    ),
+                    normal
+                )
+            ]
+
         ]
-    )
 
-    jt.setStyle(
-        TableStyle([
+        weight_table = Table(
+            weight_rows,
+            colWidths=[
+                90,
+                90,
+                100,
+                170
+            ],
+            repeatRows=1
+        )
 
-            (
-                "BACKGROUND",
-                (0,0),
-                (-1,0),
-                colors.HexColor(
-                    "#4A2915"
-                )
-            ),
+        weight_table.setStyle(
+            TableStyle([
 
-            (
-                "TEXTCOLOR",
-                (0,0),
-                (-1,0),
-                colors.HexColor(
-                    "#FFE69B"
-                )
-            ),
-
-            (
-                "GRID",
-                (0,0),
-                (-1,-1),
-                .5,
-                colors.HexColor(
-                    "#D8C08B"
-                )
-            ),
-
-            (
-                "ROWBACKGROUNDS",
-                (0,1),
-                (-1,-1),
-                [
-                    colors.white,
+                (
+                    "BACKGROUND",
+                    (0,0),
+                    (1,0),
                     colors.HexColor(
-                        "#FFF8E6"
+                        "#4A2915"
+                    )
+                ),
+
+                (
+                    "BACKGROUND",
+                    (2,0),
+                    (3,0),
+                    colors.HexColor(
+                        "#17663C"
+                    )
+                ),
+
+                (
+                    "TEXTCOLOR",
+                    (0,0),
+                    (-1,0),
+                    colors.white
+                ),
+
+                (
+                    "GRID",
+                    (0,0),
+                    (-1,-1),
+                    .5,
+                    colors.HexColor(
+                        "#C9B37D"
+                    )
+                ),
+
+                (
+                    "ROWBACKGROUNDS",
+                    (0,1),
+                    (-1,-1),
+                    [
+                        colors.white,
+                        colors.HexColor(
+                            "#FFF9EA"
+                        )
+                    ]
+                ),
+
+                (
+                    "VALIGN",
+                    (0,0),
+                    (-1,-1),
+                    "TOP"
+                ),
+
+                (
+                    "FONTSIZE",
+                    (0,0),
+                    (-1,-1),
+                    8
+                )
+
+            ])
+        )
+
+        job_header = Table(
+            [
+                [
+                    Paragraph(
+                        f"<b>Job #{index}</b>",
+                        normal
+                    ),
+
+                    Paragraph(
+                        f"<b>Date:</b> {esc(j['date'])}",
+                        normal
+                    ),
+
+                    Paragraph(
+                        f"<b>Customer:</b> {esc(customer['name'])}",
+                        normal
+                    ),
+
+                    Paragraph(
+                        f"<b>Work:</b> {esc(j['work'])}",
+                        normal
                     )
                 ]
-            ),
+            ],
+            colWidths=[
+                60,
+                110,
+                180,
+                90
+            ]
+        )
 
-            (
-                "VALIGN",
-                (0,0),
-                (-1,-1),
-                "TOP"
-            ),
+        job_header.setStyle(
+            TableStyle([
 
-            (
-                "FONTSIZE",
-                (0,0),
-                (-1,-1),
-                7
+                (
+                    "BACKGROUND",
+                    (0,0),
+                    (-1,-1),
+                    colors.HexColor(
+                        "#FFF0BA"
+                    )
+                ),
+
+                (
+                    "BOX",
+                    (0,0),
+                    (-1,-1),
+                    1,
+                    colors.HexColor(
+                        "#C79D35"
+                    )
+                ),
+
+                (
+                    "VALIGN",
+                    (0,0),
+                    (-1,-1),
+                    "TOP"
+                )
+
+            ])
+        )
+
+        story.append(
+            KeepTogether(
+                [
+                    job_header,
+
+                    Spacer(1,4),
+
+                    weight_table
+                ]
             )
-        ])
-    )
+        )
 
-    story.append(jt)
+        story.append(
+            Spacer(1,12)
+        )
+
+    if not jobs_rows:
+
+        story.append(
+            Paragraph(
+                "कोई Job Entry उपलब्ध नहीं है।",
+                normal
+            )
+        )
+
+    # ========================================================
+    # PAYMENTS
+    # ========================================================
 
     story.append(
-        Spacer(1,18)
+        Spacer(1,6)
     )
 
     story.append(
         Paragraph(
             "PAYMENTS",
-            ParagraphStyle(
-                "payment_heading",
-                parent=styles["Heading2"],
-                textColor=colors.HexColor(
-                    "#8A5A00"
-                )
-            )
+            heading_style
         )
     )
 
@@ -4908,18 +5310,18 @@ def ledger_pdf(customer_id):
             "No payments"
         ])
 
-    pt = Table(
+    payment_table = Table(
         payment_data,
         repeatRows=1,
         colWidths=[
-            90,
+            85,
             100,
             90,
-            180
+            175
         ]
     )
 
-    pt.setStyle(
+    payment_table.setStyle(
         TableStyle([
 
             (
@@ -4958,15 +5360,36 @@ def ledger_pdf(customer_id):
                         "#F0FFF6"
                     )
                 ]
+            ),
+
+            (
+                "VALIGN",
+                (0,0),
+                (-1,-1),
+                "TOP"
+            ),
+
+            (
+                "FONTSIZE",
+                (0,0),
+                (-1,-1),
+                8
             )
+
         ])
     )
 
-    story.append(pt)
+    story.append(
+        payment_table
+    )
 
     story.append(
         Spacer(1,20)
     )
+
+    # ========================================================
+    # FOOTER
+    # ========================================================
 
     story.append(
         Paragraph(
@@ -4983,7 +5406,9 @@ def ledger_pdf(customer_id):
         )
     )
 
-    doc.build(story)
+    doc.build(
+        story
+    )
 
     output.seek(0)
 
@@ -4991,8 +5416,14 @@ def ledger_pdf(customer_id):
         str(
             customer["name"]
         )
-        .replace(" ","_")
-        .replace("/","_")
+        .replace(
+            " ",
+            "_"
+        )
+        .replace(
+            "/",
+            "_"
+        )
     )
 
     return send_file(
@@ -5044,6 +5475,7 @@ def search():
                 f"%{q}%"
             )
         ).fetchall()
+
 
         jobs_rows = con.execute(
             """
@@ -5160,16 +5592,22 @@ def search():
 
                     <td>
                         <b>
-                            {esc(c["name"])}
+                            {esc(
+                                c["name"]
+                            )}
                         </b>
                     </td>
 
                     <td>
-                        {esc(c["mobile"])}
+                        {esc(
+                            c["mobile"]
+                        )}
                     </td>
 
                     <td>
-                        {esc(c["address"])}
+                        {esc(
+                            c["address"]
+                        )}
                     </td>
 
                     <td>
@@ -5197,6 +5635,7 @@ def search():
             </div>
 
         </div>
+
 
         <div class="panel">
 
@@ -5227,7 +5666,7 @@ def search():
                     </th>
 
                     <th>
-                        Final Weight
+                        नेट वजन
                     </th>
 
                     <th>
@@ -5275,7 +5714,7 @@ def search():
 
                     <td>
                         {float(
-                            j["final_weight"]
+                            j["net_weight"]
                             or 0
                         ):.3f} g
                     </td>
@@ -5289,7 +5728,7 @@ def search():
 
                         <br>
 
-                        Ginti:
+                        गिनती:
                         {int(
                             j["diamond_count"]
                             or 0
@@ -5317,7 +5756,11 @@ def search():
 
         """
 
-        if not customers_rows and not jobs_rows:
+        if (
+            not customers_rows
+            and
+            not jobs_rows
+        ):
 
             body += """
 
@@ -5354,10 +5797,30 @@ def reports():
         """
     ).fetchone()[0]
 
-    total_weight = con.execute(
+    total_final_weight = con.execute(
         """
         SELECT COALESCE(
             SUM(final_weight),
+            0
+        )
+        FROM jobs
+        """
+    ).fetchone()[0]
+
+    total_stone_weight = con.execute(
+        """
+        SELECT COALESCE(
+            SUM(stone_weight),
+            0
+        )
+        FROM jobs
+        """
+    ).fetchone()[0]
+
+    total_net_weight = con.execute(
+        """
+        SELECT COALESCE(
+            SUM(net_weight),
             0
         )
         FROM jobs
@@ -5432,24 +5895,60 @@ def reports():
 
         </div>
 
+
         <div class="card">
 
             <h3>
-                TOTAL FINAL WEIGHT
+                अंतिम वजन
             </h3>
 
             <b>
                 {float(
-                    total_weight
+                    total_final_weight
                 ):.3f} g
             </b>
 
         </div>
 
+
         <div class="card">
 
             <h3>
-                DIAMOND WEIGHT
+                पत्थर वजन
+            </h3>
+
+            <b>
+                {float(
+                    total_stone_weight
+                ):.3f} g
+            </b>
+
+        </div>
+
+
+        <div class="card">
+
+            <h3>
+                नेट वजन
+            </h3>
+
+            <b>
+                {float(
+                    total_net_weight
+                ):.3f} g
+            </b>
+
+        </div>
+
+    </div>
+
+
+    <div class="cardbox">
+
+        <div class="card">
+
+            <h3>
+                डायमंड वजन
             </h3>
 
             <b>
@@ -5460,10 +5959,11 @@ def reports():
 
         </div>
 
+
         <div class="card">
 
             <h3>
-                DIAMOND GINTI
+                डायमंड गिनती
             </h3>
 
             <b>
@@ -5475,9 +5975,6 @@ def reports():
 
         </div>
 
-    </div>
-
-    <div class="cardbox">
 
         <div class="card">
 
@@ -5486,10 +5983,13 @@ def reports():
             </h3>
 
             <b>
-                {money(total_work)}
+                {money(
+                    total_work
+                )}
             </b>
 
         </div>
+
 
         <div class="card">
 
@@ -5498,12 +5998,15 @@ def reports():
             </h3>
 
             <b class="credit">
-                {money(total_paid)}
+                {money(
+                    total_paid
+                )}
             </b>
 
         </div>
 
     </div>
+
 
     <div class="panel">
 
@@ -5618,16 +6121,23 @@ def about():
 
         <p>
             <b>
-                Weight Formula:
+                Calculation:
             </b>
             वजन + नग वजन = कुल वजन
         </p>
 
         <p>
             <b>
-                Final Formula:
+                Calculation:
             </b>
             कुल वजन - लॉस = अंतिम वजन
+        </p>
+
+        <p>
+            <b>
+                Calculation:
+            </b>
+            अंतिम वजन - पत्थर वजन = नेट वजन
         </p>
 
     </div>
@@ -5657,20 +6167,22 @@ def dashboard():
 # START
 # ============================================================
 
-# IMPORTANT:
-# Gunicorn/Render ke case me bhi database initialize hoga.
 ensure_database()
 
 
 if __name__ == "__main__":
 
-    print("=" * 55)
+    print(
+        "=" * 55
+    )
 
     print(
         "             R.K JEWELERS PRO"
     )
 
-    print("=" * 55)
+    print(
+        "=" * 55
+    )
 
     print(
         "Developer : KRISHNA"
@@ -5688,7 +6200,9 @@ if __name__ == "__main__":
         "Password  : 1234"
     )
 
-    print("=" * 55)
+    print(
+        "=" * 55
+    )
 
     app.run(
         host="0.0.0.0",
