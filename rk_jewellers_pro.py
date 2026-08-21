@@ -42,6 +42,9 @@ from reportlab.platypus import (
     TableStyle,
     KeepTogether
 )
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
 
 # ============================================================
 # APP SETTINGS
@@ -61,6 +64,7 @@ app.secret_key = (
     or os.urandom(32)
 )
 
+
 # ============================================================
 # LOGIN DETAILS
 # ============================================================
@@ -78,6 +82,85 @@ ADMIN_PASSWORD = os.environ.get(
 ADMIN_PASSWORD_HASH = generate_password_hash(
     ADMIN_PASSWORD
 )
+
+
+# ============================================================
+# PDF DEVANAGARI FONT
+# ============================================================
+
+PDF_FONT = "Helvetica"
+
+FONT_CANDIDATES = [
+    APP_DIR / "NotoSansDevanagari-Regular.ttf",
+    APP_DIR / "static" / "NotoSansDevanagari-Regular.ttf",
+
+    Path(
+        "/usr/share/fonts/truetype/noto/"
+        "NotoSansDevanagari-Regular.ttf"
+    ),
+
+    Path(
+        "/usr/share/fonts/opentype/noto/"
+        "NotoSansDevanagari-Regular.ttf"
+    ),
+
+    Path(
+        "/usr/share/fonts/truetype/lohit-devanagari/"
+        "Lohit-Devanagari.ttf"
+    ),
+
+    Path(
+        "C:/Windows/Fonts/"
+        "Nirmala.ttf"
+    ),
+
+    Path(
+        "C:/Windows/Fonts/"
+        "mangal.ttf"
+    )
+]
+
+for font_path in FONT_CANDIDATES:
+
+    try:
+
+        if font_path.exists():
+
+            pdfmetrics.registerFont(
+                TTFont(
+                    "RkDevanagari",
+                    str(font_path)
+                )
+            )
+
+            PDF_FONT = "RkDevanagari"
+
+            print(
+                "PDF Hindi Font:",
+                font_path
+            )
+
+            break
+
+    except Exception as font_error:
+
+        print(
+            "Font load error:",
+            font_error
+        )
+
+
+if PDF_FONT == "Helvetica":
+
+    print(
+        "WARNING: Devanagari PDF font not found."
+    )
+
+    print(
+        "Add NotoSansDevanagari-Regular.ttf "
+        "next to rk_jewellers_pro.py"
+    )
+
 
 # ============================================================
 # DATABASE
@@ -207,16 +290,20 @@ def setup():
     CREATE INDEX IF NOT EXISTS idx_jobs_customer
     ON jobs(customer_id);
 
+
     CREATE INDEX IF NOT EXISTS idx_jobs_date
     ON jobs(date);
 
+
     CREATE INDEX IF NOT EXISTS idx_payments_customer
     ON payments(customer_id);
+
 
     CREATE INDEX IF NOT EXISTS idx_payments_date
     ON payments(date);
 
     """)
+
 
     # ========================================================
     # OLD DATABASE UPGRADE
@@ -243,6 +330,7 @@ def setup():
                 ADD COLUMN {column} {definition}
                 """
             )
+
 
     # ========================================================
     # CUSTOMERS
@@ -278,6 +366,7 @@ def setup():
         "TEXT"
     )
 
+
     # ========================================================
     # JOBS
     # ========================================================
@@ -312,8 +401,7 @@ def setup():
         "TEXT NOT NULL DEFAULT 'Pending'"
     )
 
-    # Legacy columns kept only for old database compatibility.
-    # They are NOT used in the current UI/calculation.
+    # पुराने fields केवल database compatibility के लिए
 
     add_column(
         "jobs",
@@ -387,7 +475,7 @@ def setup():
         "TEXT DEFAULT ''"
     )
 
-    # Old columns are intentionally retained but not displayed.
+    # पुराने columns रखे हैं, लेकिन UI/calculation में नहीं
     add_column(
         "jobs",
         "touch_weight",
@@ -400,7 +488,6 @@ def setup():
         "INTEGER DEFAULT 1"
     )
 
-    # Old column retained only for old database compatibility.
     add_column(
         "jobs",
         "taanch",
@@ -425,6 +512,7 @@ def setup():
         "TEXT"
     )
 
+
     # ========================================================
     # PAYMENTS
     # ========================================================
@@ -447,9 +535,6 @@ def setup():
         "TEXT"
     )
 
-    # ========================================================
-    # COMMIT
-    # ========================================================
 
     con.commit()
 
@@ -1064,25 +1149,11 @@ tr:hover td{
     font-weight:bold;
 }
 
-.badge.green{
-
-    background:#dff5e8;
-
-    color:#17663c;
-}
-
 .badge.yellow{
 
     background:#fff0bd;
 
     color:#785b00;
-}
-
-.badge.red{
-
-    background:#ffe1e4;
-
-    color:#8b1e2b;
 }
 
 .muted{
@@ -1097,39 +1168,6 @@ tr:hover td{
     gap:6px;
 
     flex-wrap:wrap;
-}
-
-.two{
-
-    display:grid;
-
-    grid-template-columns:
-        1fr 1fr;
-
-    gap:15px;
-}
-
-.toolbar{
-
-    display:flex;
-
-    gap:10px;
-
-    flex-wrap:wrap;
-
-    align-items:end;
-}
-
-.login{
-
-    max-width:430px;
-
-    margin:70px auto;
-}
-
-.login .panel{
-
-    padding:30px;
 }
 
 .balance{
@@ -1197,11 +1235,9 @@ tr:hover td{
 
 .auto-box{
 
-    background:
-        #fff0bc;
+    background:#fff0bc;
 
-    border-color:
-        #d0a52d;
+    border-color:#d0a52d;
 
     font-weight:bold;
 }
@@ -1273,11 +1309,6 @@ tr:hover td{
         grid-template-columns:1fr;
     }
 
-    .two{
-
-        grid-template-columns:1fr;
-    }
-
     .panel{
 
         padding:14px;
@@ -1287,6 +1318,7 @@ tr:hover td{
 
         font-size:25px;
     }
+
 }
 
 @media print{
@@ -1319,11 +1351,11 @@ tr:hover td{
 <header>
 
 <h1>
-    R.K JEWELERS
+R.K JEWELERS
 </h1>
 
 <p>
-    JEWELLERY JOB WORK • CUSTOMER LEDGER • ACCOUNTS
+JEWELLERY JOB WORK • CUSTOMER LEDGER • ACCOUNTS
 </p>
 
 </header>
@@ -1349,47 +1381,47 @@ tr:hover td{
 {% if session.get('logged_in') %}
 
 <div class="userbox">
-    Logged in as {{ session.get('user') }}
+Logged in as {{ session.get('user') }}
 </div>
 
 <a href="{{ url_for('home') }}">
-    🏠 Dashboard
+🏠 Dashboard
 </a>
 
 <a href="{{ url_for('customers') }}">
-    👥 Customers
+👥 Customers
 </a>
 
 <a href="{{ url_for('jobs') }}">
-    💎 Job Entry
+💎 Job Entry
 </a>
 
 <a href="{{ url_for('payments') }}">
-    💰 Payment Entry
+💰 Payment Entry
 </a>
 
 <a href="{{ url_for('ledger') }}">
-    📒 Customer Ledger
+📒 Customer Ledger
 </a>
 
 <a href="{{ url_for('reports') }}">
-    📊 Reports
+📊 Reports
 </a>
 
 <a href="{{ url_for('search') }}">
-    🔎 Search
+🔎 Search
 </a>
 
 <a href="{{ url_for('backup') }}">
-    💾 Backup
+💾 Backup
 </a>
 
 <a href="{{ url_for('about') }}">
-    ℹ️ Shop Information
+ℹ️ Shop Information
 </a>
 
 <a href="{{ url_for('logout') }}">
-    🚪 Logout
+🚪 Logout
 </a>
 
 {% endif %}
@@ -1405,7 +1437,7 @@ tr:hover td{
 {% for m in messages %}
 
 <div class="msg">
-    {{ m }}
+{{ m }}
 </div>
 
 {% endfor %}
@@ -1419,7 +1451,7 @@ tr:hover td{
 {% for m in messages %}
 
 <div class="err">
-    {{ m }}
+{{ m }}
 </div>
 
 {% endfor %}
@@ -1647,83 +1679,45 @@ def home():
     <div class="cardbox">
 
         <div class="card">
-
-            <h3>
-                ACTIVE CUSTOMERS
-            </h3>
-
-            <b>
-                {customers_count}
-            </b>
-
+            <h3>ACTIVE CUSTOMERS</h3>
+            <b>{customers_count}</b>
         </div>
 
         <div class="card">
-
-            <h3>
-                TOTAL JOBS
-            </h3>
-
-            <b>
-                {jobs_count}
-            </b>
-
+            <h3>TOTAL JOBS</h3>
+            <b>{jobs_count}</b>
         </div>
 
         <div class="card">
-
-            <h3>
-                TOTAL KAAM
-            </h3>
-
-            <b>
-                {money(total_work)}
-            </b>
-
+            <h3>TOTAL KAAM</h3>
+            <b>{money(total_work)}</b>
         </div>
 
         <div class="card">
-
-            <h3>
-                TOTAL PAYMENT
-            </h3>
-
-            <b>
-                {money(total_paid)}
-            </b>
-
+            <h3>TOTAL PAYMENT</h3>
+            <b>{money(total_paid)}</b>
         </div>
 
     </div>
+
 
     <div class="cardbox"
          style="margin-top:15px;">
 
         <div class="card">
-
-            <h3>
-                PENDING JOBS
-            </h3>
-
-            <b>
-                {pending}
-            </b>
-
+            <h3>PENDING JOBS</h3>
+            <b>{pending}</b>
         </div>
 
         <div class="card">
-
-            <h3>
-                TOTAL BAAKI
-            </h3>
-
+            <h3>TOTAL BAAKI</h3>
             <b class="debit">
                 {money(balance)}
             </b>
-
         </div>
 
     </div>
+
 
     <div class="panel">
 
@@ -1764,6 +1758,7 @@ def home():
         </div>
 
     </div>
+
 
     <div class="panel">
 
@@ -1975,9 +1970,7 @@ def customers():
 
                 <div>
 
-                    <label>
-                        Name
-                    </label>
+                    <label>Name</label>
 
                     <input
                         name="name"
@@ -1989,9 +1982,7 @@ def customers():
 
                 <div>
 
-                    <label>
-                        Mobile
-                    </label>
+                    <label>Mobile</label>
 
                     <input
                         name="mobile"
@@ -2002,9 +1993,7 @@ def customers():
 
                 <div>
 
-                    <label>
-                        Address
-                    </label>
+                    <label>Address</label>
 
                     <input
                         name="address"
@@ -2017,9 +2006,7 @@ def customers():
                     style="grid-column:1/-1"
                 >
 
-                    <label>
-                        Notes
-                    </label>
+                    <label>Notes</label>
 
                     <textarea
                         name="notes"
@@ -2043,6 +2030,7 @@ def customers():
 
     </div>
 
+
     <div class="panel">
 
         <h3>
@@ -2055,33 +2043,19 @@ def customers():
 
             <tr>
 
-                <th>
-                    Name
-                </th>
+                <th>Name</th>
 
-                <th>
-                    Mobile
-                </th>
+                <th>Mobile</th>
 
-                <th>
-                    Jobs
-                </th>
+                <th>Jobs</th>
 
-                <th>
-                    Total Kaam
-                </th>
+                <th>Total Kaam</th>
 
-                <th>
-                    Paid
-                </th>
+                <th>Paid</th>
 
-                <th>
-                    Baaki
-                </th>
+                <th>Baaki</th>
 
-                <th>
-                    Action
-                </th>
+                <th>Action</th>
 
             </tr>
 
@@ -2265,6 +2239,7 @@ def jobs():
             (edit_id,)
         ).fetchone()
 
+
     if request.method == "POST":
 
         try:
@@ -2295,6 +2270,7 @@ def jobs():
                 "status",
                 "Pending"
             ).strip()
+
 
             # =================================================
             # WEIGHT DETAILS
@@ -2344,6 +2320,7 @@ def jobs():
                 ""
             ).strip()
 
+
             # =================================================
             # AUTOMATIC CALCULATION
             # =================================================
@@ -2352,7 +2329,6 @@ def jobs():
             # कुल वजन - लॉस = अंतिम वजन
             # अंतिम वजन - पत्थर वजन = नेट वजन
             #
-            # =================================================
 
             total_weight = (
                 weight +
@@ -2368,6 +2344,7 @@ def jobs():
                 0,
                 final_weight - stone_weight
             )
+
 
             # =================================================
             # VALIDATION
@@ -2439,6 +2416,7 @@ def jobs():
                     "Amount negative nahi ho sakta."
                 )
 
+
             # =================================================
             # UPDATE
             # =================================================
@@ -2450,6 +2428,7 @@ def jobs():
                     UPDATE jobs
 
                     SET
+
                         customer_id=?,
                         date=?,
                         jewellery=?,
@@ -2475,6 +2454,7 @@ def jobs():
                     WHERE id=?
                     """,
                     (
+
                         customer_id,
                         date_value,
                         jewellery,
@@ -2498,12 +2478,14 @@ def jobs():
                         notes,
 
                         edit_id
+
                     )
                 )
 
                 message = (
                     "Job successfully update ho gayi."
                 )
+
 
             # =================================================
             # INSERT
@@ -2566,6 +2548,7 @@ def jobs():
                     )
                     """,
                     (
+
                         customer_id,
                         date_value,
                         jewellery,
@@ -2587,13 +2570,16 @@ def jobs():
                         quantity,
                         work_amount,
                         notes,
+
                         datetime.now().isoformat()
+
                     )
                 )
 
                 message = (
                     "Job successfully save ho gayi."
                 )
+
 
             con.commit()
 
@@ -2608,6 +2594,7 @@ def jobs():
                 url_for("jobs")
             )
 
+
         except Exception as e:
 
             con.rollback()
@@ -2616,6 +2603,7 @@ def jobs():
                 f"Job error: {e}",
                 "error"
             )
+
 
     customers_rows = con.execute(
         """
@@ -2628,11 +2616,15 @@ def jobs():
         """
     ).fetchall()
 
+
     rows = con.execute(
         """
         SELECT
+
             j.*,
+
             c.name AS customer_name,
+
             c.mobile AS customer_mobile
 
         FROM jobs j
@@ -2646,11 +2638,14 @@ def jobs():
         """
     ).fetchall()
 
+
     con.close()
+
 
     today = datetime.now().strftime(
         "%Y-%m-%d"
     )
+
 
     if edit_job:
 
@@ -2728,6 +2723,7 @@ def jobs():
 
         button = "UPDATE JOB"
 
+
     else:
 
         selected_customer = ""
@@ -2764,6 +2760,7 @@ def jobs():
 
         button = "SAVE JOB"
 
+
     customer_options = ""
 
     for c in customers_rows:
@@ -2787,17 +2784,20 @@ def jobs():
 
         """
 
+
     body = f"""
 
     <h2>
         {heading}
     </h2>
 
+
     <div class="panel">
 
     <form method="post">
 
         <div class="form">
+
 
             <div>
 
@@ -3204,49 +3204,30 @@ def jobs():
 
             <tr>
 
-                <th>
-                    ID
-                </th>
+                <th>ID</th>
 
-                <th>
-                    Date
-                </th>
+                <th>Date</th>
 
-                <th>
-                    Customer
-                </th>
+                <th>Customer</th>
 
-                <th>
-                    Jewellery
-                </th>
+                <th>Jewellery</th>
 
-                <th>
-                    Work
-                </th>
+                <th>Work</th>
 
-                <th>
-                    वजन विवरण
-                </th>
+                <th>वजन विवरण</th>
 
-                <th>
-                    डायमंड विवरण
-                </th>
+                <th>डायमंड विवरण</th>
 
-                <th>
-                    Amount
-                </th>
+                <th>Amount</th>
 
-                <th>
-                    Status
-                </th>
+                <th>Status</th>
 
-                <th>
-                    Action
-                </th>
+                <th>Action</th>
 
             </tr>
 
     """
+
 
     for r in rows:
 
@@ -3275,6 +3256,7 @@ def jobs():
             </a>
 
             """
+
 
         body += f"""
 
@@ -3404,9 +3386,7 @@ def jobs():
 
                 <td>
 
-                    <span
-                        class="badge yellow"
-                    >
+                    <span class="badge yellow">
                         {esc(
                             r["status"]
                         )}
@@ -3463,6 +3443,7 @@ def jobs():
             </tr>
 
         """
+
 
     body += """
 
@@ -3555,6 +3536,7 @@ def jobs():
     </script>
 
     """
+
 
     return page(
         "Jobs",
@@ -3696,6 +3678,7 @@ def payments():
             url_for("payments")
         )
 
+
     customers_rows = con.execute(
         """
         SELECT
@@ -3706,6 +3689,7 @@ def payments():
         ORDER BY name
         """
     ).fetchall()
+
 
     rows = con.execute(
         """
@@ -3726,17 +3710,21 @@ def payments():
         """
     ).fetchall()
 
+
     con.close()
+
 
     today = datetime.now().strftime(
         "%Y-%m-%d"
     )
+
 
     body = """
 
     <h2>
         💰 Payment Entry
     </h2>
+
 
     <div class="panel">
 
@@ -3773,6 +3761,7 @@ def payments():
 
                 </div>
 
+
                 <div>
 
                     <label>
@@ -3787,6 +3776,7 @@ def payments():
                     >
 
                 </div>
+
 
                 <div>
 
@@ -3803,6 +3793,7 @@ def payments():
                     >
 
                 </div>
+
 
                 <div>
 
@@ -3834,6 +3825,7 @@ def payments():
 
                 </div>
 
+
                 <div>
 
                     <label>
@@ -3849,7 +3841,9 @@ def payments():
 
             </div>
 
+
             <br>
+
 
             <button
                 class="green"
@@ -3861,6 +3855,7 @@ def payments():
         </form>
 
     </div>
+
 
     <div class="panel">
 
@@ -3874,31 +3869,20 @@ def payments():
 
             <tr>
 
-                <th>
-                    ID
-                </th>
+                <th>ID</th>
 
-                <th>
-                    Date
-                </th>
+                <th>Date</th>
 
-                <th>
-                    Customer
-                </th>
+                <th>Customer</th>
 
-                <th>
-                    Amount
-                </th>
+                <th>Amount</th>
 
-                <th>
-                    Mode
-                </th>
+                <th>Mode</th>
 
-                <th>
-                    Note
-                </th>
+                <th>Note</th>
 
             </tr>
+
 
             {% for r in rows %}
 
@@ -3936,6 +3920,7 @@ def payments():
 
             </tr>
 
+
             {% else %}
 
             <tr>
@@ -3955,6 +3940,7 @@ def payments():
     </div>
 
     """
+
 
     return render_template_string(
         BASE_HTML,
@@ -3983,6 +3969,7 @@ def ledger():
 
     con = db()
 
+
     customers_rows = con.execute(
         """
         SELECT
@@ -3994,11 +3981,17 @@ def ledger():
         """
     ).fetchall()
 
+
     selected = None
+
     jobs_rows = []
+
     payment_rows = []
+
     total_work = 0
+
     total_paid = 0
+
 
     if customer_id:
 
@@ -4010,6 +4003,7 @@ def ledger():
             """,
             (customer_id,)
         ).fetchone()
+
 
         if selected:
 
@@ -4023,6 +4017,7 @@ def ledger():
                 (customer_id,)
             ).fetchall()
 
+
             payment_rows = con.execute(
                 """
                 SELECT *
@@ -4032,6 +4027,7 @@ def ledger():
                 """,
                 (customer_id,)
             ).fetchall()
+
 
             total_work = con.execute(
                 """
@@ -4045,6 +4041,7 @@ def ledger():
                 (customer_id,)
             ).fetchone()[0]
 
+
             total_paid = con.execute(
                 """
                 SELECT COALESCE(
@@ -4057,7 +4054,9 @@ def ledger():
                 (customer_id,)
             ).fetchone()[0]
 
+
     con.close()
+
 
     balance = (
         float(total_work or 0)
@@ -4065,17 +4064,20 @@ def ledger():
         float(total_paid or 0)
     )
 
+
     customer_name = (
         selected["name"]
         if selected
         else ""
     )
 
+
     body = f"""
 
     <h2>
         📒 Customer Ledger
     </h2>
+
 
     <div class="panel no-print">
 
@@ -4084,6 +4086,7 @@ def ledger():
             <label>
                 Customer Select
             </label>
+
 
             <select
                 name="customer_id"
@@ -4094,12 +4097,15 @@ def ledger():
                     Select Customer
                 </option>
 
+
                 {
                     "".join(
                         f'''
                         <option
                             value="{c["id"]}"
-                            {"selected" if customer_id == c["id"] else ""}
+                            {"selected"
+                                if customer_id == c["id"]
+                                else ""}
                         >
                             {esc(c["name"])}
                         </option>
@@ -4108,6 +4114,7 @@ def ledger():
                     )
                 }
 
+
             </select>
 
         </form>
@@ -4115,6 +4122,7 @@ def ledger():
     </div>
 
     """
+
 
     if selected:
 
@@ -4128,7 +4136,9 @@ def ledger():
             .replace("-", "")
         )
 
+
         whatsapp_button = ""
+
 
         if mobile:
 
@@ -4143,6 +4153,7 @@ def ledger():
             </a>
 
             """
+
 
         body += f"""
 
@@ -4160,6 +4171,7 @@ def ledger():
 
             </div>
 
+
             <div class="card">
 
                 <h3>
@@ -4172,6 +4184,7 @@ def ledger():
 
             </div>
 
+
             <div class="card">
 
                 <h3>
@@ -4183,6 +4196,7 @@ def ledger():
                 </b>
 
             </div>
+
 
             <div class="card">
 
@@ -4198,6 +4212,7 @@ def ledger():
 
         </div>
 
+
         <div class="panel">
 
             <div class="actions no-print">
@@ -4212,6 +4227,7 @@ def ledger():
                     📄 DOWNLOAD COLOUR PDF
                 </a>
 
+
                 <button
                     class="btn"
                     onclick="window.print()"
@@ -4219,15 +4235,19 @@ def ledger():
                     🖨️ PRINT
                 </button>
 
+
                 {whatsapp_button}
 
             </div>
 
+
             <hr>
+
 
             <h3>
                 💎 Job Entries
             </h3>
+
 
             <div class="table">
 
@@ -4263,6 +4283,7 @@ def ledger():
 
         """
 
+
         for j in jobs_rows:
 
             body += f"""
@@ -4270,16 +4291,25 @@ def ledger():
                 <tr>
 
                     <td>
-                        {esc(j["date"])}
+                        {esc(
+                            j["date"]
+                        )}
                     </td>
 
-                    <td>
-                        {esc(j["jewellery"])}
-                    </td>
 
                     <td>
-                        {esc(j["work"])}
+                        {esc(
+                            j["jewellery"]
+                        )}
                     </td>
+
+
+                    <td>
+                        {esc(
+                            j["work"]
+                        )}
+                    </td>
+
 
                     <td>
 
@@ -4339,6 +4369,7 @@ def ledger():
 
                     </td>
 
+
                     <td>
 
                         वजन:
@@ -4365,15 +4396,19 @@ def ledger():
 
                     </td>
 
+
                     <td class="debit">
+
                         {money(
                             j["work_amount"]
                         )}
+
                     </td>
 
                 </tr>
 
             """
+
 
         body += """
 
@@ -4416,6 +4451,7 @@ def ledger():
 
         """
 
+
         for p in payment_rows:
 
             body += f"""
@@ -4423,7 +4459,9 @@ def ledger():
                 <tr>
 
                     <td>
-                        {esc(p["date"])}
+                        {esc(
+                            p["date"]
+                        )}
                     </td>
 
                     <td class="credit">
@@ -4448,6 +4486,7 @@ def ledger():
 
             """
 
+
         body += """
 
             </table>
@@ -4457,6 +4496,7 @@ def ledger():
         </div>
 
         """
+
 
     else:
 
@@ -4471,6 +4511,7 @@ def ledger():
         </div>
 
         """
+
 
     return page(
         "Customer Ledger",
@@ -4490,6 +4531,7 @@ def ledger_pdf(customer_id):
 
     con = db()
 
+
     customer = con.execute(
         """
         SELECT *
@@ -4498,6 +4540,7 @@ def ledger_pdf(customer_id):
         """,
         (customer_id,)
     ).fetchone()
+
 
     if not customer:
 
@@ -4512,6 +4555,7 @@ def ledger_pdf(customer_id):
             url_for("ledger")
         )
 
+
     jobs_rows = con.execute(
         """
         SELECT *
@@ -4522,6 +4566,7 @@ def ledger_pdf(customer_id):
         (customer_id,)
     ).fetchall()
 
+
     payment_rows = con.execute(
         """
         SELECT *
@@ -4531,6 +4576,7 @@ def ledger_pdf(customer_id):
         """,
         (customer_id,)
     ).fetchall()
+
 
     total_work = con.execute(
         """
@@ -4544,6 +4590,7 @@ def ledger_pdf(customer_id):
         (customer_id,)
     ).fetchone()[0]
 
+
     total_paid = con.execute(
         """
         SELECT COALESCE(
@@ -4556,7 +4603,9 @@ def ledger_pdf(customer_id):
         (customer_id,)
     ).fetchone()[0]
 
+
     con.close()
+
 
     balance = (
         float(total_work or 0)
@@ -4564,7 +4613,9 @@ def ledger_pdf(customer_id):
         float(total_paid or 0)
     )
 
+
     output = BytesIO()
+
 
     doc = SimpleDocTemplate(
         output,
@@ -4575,37 +4626,66 @@ def ledger_pdf(customer_id):
         bottomMargin=28
     )
 
+
     styles = getSampleStyleSheet()
+
+
+    # ========================================================
+    # PDF STYLES WITH DEVANAGARI FONT
+    # ========================================================
 
     title_style = ParagraphStyle(
         "TitleCustom",
         parent=styles["Title"],
+        fontName=PDF_FONT,
         alignment=TA_CENTER,
-        fontSize=22,
+        fontSize=21,
+        leading=25,
         textColor=colors.HexColor(
             "#8A5A00"
         ),
         spaceAfter=8
     )
 
+
+    subtitle_style = ParagraphStyle(
+        "SubtitleCustom",
+        parent=styles["Normal"],
+        fontName=PDF_FONT,
+        alignment=TA_CENTER,
+        fontSize=9.5,
+        leading=12,
+        textColor=colors.HexColor(
+            "#5A3718"
+        ),
+        spaceAfter=4
+    )
+
+
     normal = ParagraphStyle(
         "NormalCustom",
         parent=styles["Normal"],
+        fontName=PDF_FONT,
         fontSize=8.5,
         leading=11
     )
 
+
     small = ParagraphStyle(
         "SmallCustom",
         parent=styles["Normal"],
+        fontName=PDF_FONT,
         fontSize=7.5,
         leading=9
     )
 
+
     heading_style = ParagraphStyle(
         "SectionHeading",
         parent=styles["Heading2"],
+        fontName=PDF_FONT,
         fontSize=13,
+        leading=16,
         textColor=colors.HexColor(
             "#8A5A00"
         ),
@@ -4613,10 +4693,25 @@ def ledger_pdf(customer_id):
         spaceAfter=8
     )
 
+
+    footer_style = ParagraphStyle(
+        "FooterStyle",
+        parent=styles["Normal"],
+        fontName=PDF_FONT,
+        alignment=TA_CENTER,
+        fontSize=8.5,
+        leading=10,
+        textColor=colors.HexColor(
+            "#8A5A00"
+        )
+    )
+
+
     story = []
 
+
     # ========================================================
-    # PDF HEADER
+    # HEADER
     # ========================================================
 
     story.append(
@@ -4626,27 +4721,30 @@ def ledger_pdf(customer_id):
         )
     )
 
+
     story.append(
         Paragraph(
             "JEWELLERY JOB WORK & CUSTOMER LEDGER",
-            ParagraphStyle(
-                "sub",
-                parent=styles["Normal"],
-                alignment=TA_CENTER,
-                fontSize=10,
-                textColor=colors.HexColor(
-                    "#5A3718"
-                )
-            )
+            subtitle_style
         )
     )
+
+
+    story.append(
+        Paragraph(
+            "वजन विवरण • डायमंड विवरण • भुगतान विवरण",
+            subtitle_style
+        )
+    )
+
 
     story.append(
         Spacer(1,12)
     )
 
+
     # ========================================================
-    # CUSTOMER DETAILS
+    # CUSTOMER INFORMATION
     # ========================================================
 
     customer_info = [
@@ -4695,6 +4793,7 @@ def ledger_pdf(customer_id):
 
     ]
 
+
     customer_table = Table(
         customer_info,
         colWidths=[
@@ -4703,8 +4802,16 @@ def ledger_pdf(customer_id):
         ]
     )
 
+
     customer_table.setStyle(
         TableStyle([
+
+            (
+                "FONTNAME",
+                (0,0),
+                (-1,-1),
+                PDF_FONT
+            ),
 
             (
                 "BACKGROUND",
@@ -4745,13 +4852,16 @@ def ledger_pdf(customer_id):
         ])
     )
 
+
     story.append(
         customer_table
     )
 
+
     story.append(
         Spacer(1,15)
     )
+
 
     # ========================================================
     # SUMMARY
@@ -4760,21 +4870,49 @@ def ledger_pdf(customer_id):
     summary = [
 
         [
-            "Total Kaam",
-            money(total_work)
+            Paragraph(
+                "<b>Total Kaam</b>",
+                normal
+            ),
+
+            Paragraph(
+                money(
+                    total_work
+                ),
+                normal
+            )
         ],
 
         [
-            "Total Paid",
-            money(total_paid)
+            Paragraph(
+                "<b>Total Paid</b>",
+                normal
+            ),
+
+            Paragraph(
+                money(
+                    total_paid
+                ),
+                normal
+            )
         ],
 
         [
-            "Baaki",
-            money(balance)
+            Paragraph(
+                "<b>Baaki</b>",
+                normal
+            ),
+
+            Paragraph(
+                money(
+                    balance
+                ),
+                normal
+            )
         ]
 
     ]
+
 
     summary_table = Table(
         summary,
@@ -4784,8 +4922,16 @@ def ledger_pdf(customer_id):
         ]
     )
 
+
     summary_table.setStyle(
         TableStyle([
+
+            (
+                "FONTNAME",
+                (0,0),
+                (-1,-1),
+                PDF_FONT
+            ),
 
             (
                 "BACKGROUND",
@@ -4839,18 +4985,28 @@ def ledger_pdf(customer_id):
                 (1,0),
                 (1,-1),
                 "RIGHT"
+            ),
+
+            (
+                "VALIGN",
+                (0,0),
+                (-1,-1),
+                "MIDDLE"
             )
 
         ])
     )
 
+
     story.append(
         summary_table
     )
 
+
     story.append(
         Spacer(1,18)
     )
+
 
     # ========================================================
     # JOB ENTRIES
@@ -4863,24 +5019,51 @@ def ledger_pdf(customer_id):
         )
     )
 
-    # ========================================================
-    # IMPORTANT:
-    # FULL WEIGHT DETAILS IN PDF
-    # ========================================================
+
+    if not jobs_rows:
+
+        story.append(
+            Paragraph(
+                "कोई Job Entry उपलब्ध नहीं है।",
+                normal
+            )
+        )
+
 
     for index, j in enumerate(
         jobs_rows,
         start=1
     ):
 
+        gross_weight = float(
+            j["gross_weight"]
+            or 0
+        )
+
+        nag_weight = float(
+            j["nag_weight"]
+            or 0
+        )
+
         total_weight = float(
             j["total_weight"]
+            or (
+                gross_weight +
+                nag_weight
+            )
+        )
+
+        loss = float(
+            j["loss"]
             or 0
         )
 
         final_weight = float(
             j["final_weight"]
-            or 0
+            or max(
+                0,
+                total_weight - loss
+            )
         )
 
         stone_weight = float(
@@ -4890,23 +5073,150 @@ def ledger_pdf(customer_id):
 
         net_weight = float(
             j["net_weight"]
+            or max(
+                0,
+                final_weight - stone_weight
+            )
+        )
+
+        diamond_weight = float(
+            j["diamond_weight"]
             or 0
         )
 
-        weight_rows = [
+        diamond_count = int(
+            j["diamond_count"]
+            or 0
+        )
+
+        quantity = int(
+            j["quantity"]
+            or 0
+        )
+
+        fancy_diamond = esc(
+            j["fancy_diamond"]
+            or "-"
+        )
+
+
+        # ====================================================
+        # JOB HEADER
+        # ====================================================
+
+        job_header = Table(
+            [
+                [
+                    Paragraph(
+                        f"<b>Job #{index}</b>",
+                        normal
+                    ),
+
+                    Paragraph(
+                        f"<b>Date:</b> {esc(j['date'])}",
+                        normal
+                    ),
+
+                    Paragraph(
+                        f"<b>Customer:</b> "
+                        f"{esc(customer['name'])}",
+                        normal
+                    ),
+
+                    Paragraph(
+                        f"<b>Work:</b> "
+                        f"{esc(j['work'])}",
+                        normal
+                    )
+                ]
+            ],
+            colWidths=[
+                55,
+                90,
+                195,
+                90
+            ]
+        )
+
+
+        job_header.setStyle(
+            TableStyle([
+
+                (
+                    "FONTNAME",
+                    (0,0),
+                    (-1,-1),
+                    PDF_FONT
+                ),
+
+                (
+                    "BACKGROUND",
+                    (0,0),
+                    (-1,-1),
+                    colors.HexColor(
+                        "#FFF0BA"
+                    )
+                ),
+
+                (
+                    "BOX",
+                    (0,0),
+                    (-1,-1),
+                    1,
+                    colors.HexColor(
+                        "#C79D35"
+                    )
+                ),
+
+                (
+                    "VALIGN",
+                    (0,0),
+                    (-1,-1),
+                    "TOP"
+                )
+
+            ])
+        )
+
+
+        story.append(
+            job_header
+        )
+
+
+        story.append(
+            Spacer(1,4)
+        )
+
+
+        # ====================================================
+        # FULL WEIGHT + DIAMOND DETAILS
+        # ====================================================
+
+        details = [
 
             [
                 Paragraph(
                     "<b>वजन विवरण</b>",
                     normal
                 ),
-                "",
+
+                Paragraph(
+                    "<b>मान</b>",
+                    normal
+                ),
+
                 Paragraph(
                     "<b>डायमंड विवरण</b>",
                     normal
                 ),
-                ""
+
+                Paragraph(
+                    "<b>मान</b>",
+                    normal
+                )
             ],
+
 
             [
                 Paragraph(
@@ -4915,7 +5225,7 @@ def ledger_pdf(customer_id):
                 ),
 
                 Paragraph(
-                    f'{float(j["gross_weight"] or 0):.3f} g',
+                    f"{gross_weight:.3f} g",
                     normal
                 ),
 
@@ -4925,10 +5235,11 @@ def ledger_pdf(customer_id):
                 ),
 
                 Paragraph(
-                    f'{float(j["diamond_weight"] or 0):.3f} g',
+                    f"{diamond_weight:.3f} g",
                     normal
                 )
             ],
+
 
             [
                 Paragraph(
@@ -4937,7 +5248,7 @@ def ledger_pdf(customer_id):
                 ),
 
                 Paragraph(
-                    f'{float(j["nag_weight"] or 0):.3f} g',
+                    f"{nag_weight:.3f} g",
                     normal
                 ),
 
@@ -4948,14 +5259,12 @@ def ledger_pdf(customer_id):
 
                 Paragraph(
                     str(
-                        int(
-                            j["diamond_count"]
-                            or 0
-                        )
+                        diamond_count
                     ),
                     normal
                 )
             ],
+
 
             [
                 Paragraph(
@@ -4964,7 +5273,7 @@ def ledger_pdf(customer_id):
                 ),
 
                 Paragraph(
-                    f'{total_weight:.3f} g',
+                    f"{total_weight:.3f} g",
                     normal
                 ),
 
@@ -4974,13 +5283,11 @@ def ledger_pdf(customer_id):
                 ),
 
                 Paragraph(
-                    esc(
-                        j["fancy_diamond"]
-                        or ""
-                    ),
+                    fancy_diamond,
                     normal
                 )
             ],
+
 
             [
                 Paragraph(
@@ -4989,7 +5296,7 @@ def ledger_pdf(customer_id):
                 ),
 
                 Paragraph(
-                    f'{float(j["loss"] or 0):.3f} g',
+                    f"{loss:.3f} g",
                     normal
                 ),
 
@@ -5000,14 +5307,12 @@ def ledger_pdf(customer_id):
 
                 Paragraph(
                     str(
-                        int(
-                            j["quantity"]
-                            or 0
-                        )
+                        quantity
                     ),
                     normal
                 )
             ],
+
 
             [
                 Paragraph(
@@ -5016,7 +5321,7 @@ def ledger_pdf(customer_id):
                 ),
 
                 Paragraph(
-                    f'{final_weight:.3f} g',
+                    f"{final_weight:.3f} g",
                     normal
                 ),
 
@@ -5033,6 +5338,7 @@ def ledger_pdf(customer_id):
                 )
             ],
 
+
             [
                 Paragraph(
                     "पत्थर वजन",
@@ -5040,7 +5346,7 @@ def ledger_pdf(customer_id):
                 ),
 
                 Paragraph(
-                    f'{stone_weight:.3f} g',
+                    f"{stone_weight:.3f} g",
                     normal
                 ),
 
@@ -5057,6 +5363,7 @@ def ledger_pdf(customer_id):
                 )
             ],
 
+
             [
                 Paragraph(
                     "= नेट वजन",
@@ -5064,7 +5371,7 @@ def ledger_pdf(customer_id):
                 ),
 
                 Paragraph(
-                    f'{net_weight:.3f} g',
+                    f"{net_weight:.3f} g",
                     normal
                 ),
 
@@ -5083,19 +5390,28 @@ def ledger_pdf(customer_id):
 
         ]
 
-        weight_table = Table(
-            weight_rows,
+
+        details_table = Table(
+            details,
             colWidths=[
-                90,
-                90,
-                100,
-                170
+                85,
+                85,
+                105,
+                155
             ],
             repeatRows=1
         )
 
-        weight_table.setStyle(
+
+        details_table.setStyle(
             TableStyle([
+
+                (
+                    "FONTNAME",
+                    (0,0),
+                    (-1,-1),
+                    PDF_FONT
+                ),
 
                 (
                     "BACKGROUND",
@@ -5161,102 +5477,107 @@ def ledger_pdf(customer_id):
             ])
         )
 
-        job_header = Table(
-            [
-                [
-                    Paragraph(
-                        f"<b>Job #{index}</b>",
-                        normal
-                    ),
-
-                    Paragraph(
-                        f"<b>Date:</b> {esc(j['date'])}",
-                        normal
-                    ),
-
-                    Paragraph(
-                        f"<b>Customer:</b> {esc(customer['name'])}",
-                        normal
-                    ),
-
-                    Paragraph(
-                        f"<b>Work:</b> {esc(j['work'])}",
-                        normal
-                    )
-                ]
-            ],
-            colWidths=[
-                60,
-                110,
-                180,
-                90
-            ]
-        )
-
-        job_header.setStyle(
-            TableStyle([
-
-                (
-                    "BACKGROUND",
-                    (0,0),
-                    (-1,-1),
-                    colors.HexColor(
-                        "#FFF0BA"
-                    )
-                ),
-
-                (
-                    "BOX",
-                    (0,0),
-                    (-1,-1),
-                    1,
-                    colors.HexColor(
-                        "#C79D35"
-                    )
-                ),
-
-                (
-                    "VALIGN",
-                    (0,0),
-                    (-1,-1),
-                    "TOP"
-                )
-
-            ])
-        )
 
         story.append(
             KeepTogether(
                 [
-                    job_header,
-
-                    Spacer(1,4),
-
-                    weight_table
+                    details_table,
+                    Spacer(1,10)
                 ]
             )
         )
 
-        story.append(
-            Spacer(1,12)
-        )
 
-    if not jobs_rows:
+        # ====================================================
+        # NOTES
+        # ====================================================
 
-        story.append(
-            Paragraph(
-                "कोई Job Entry उपलब्ध नहीं है।",
-                normal
+        if j["notes"]:
+
+            notes_table = Table(
+                [
+                    [
+                        Paragraph(
+                            "<b>Notes</b>",
+                            normal
+                        ),
+                        Paragraph(
+                            esc(
+                                j["notes"]
+                            ),
+                            normal
+                        )
+                    ]
+                ],
+                colWidths=[
+                    85,
+                    345
+                ]
             )
-        )
+
+
+            notes_table.setStyle(
+                TableStyle([
+
+                    (
+                        "FONTNAME",
+                        (0,0),
+                        (-1,-1),
+                        PDF_FONT
+                    ),
+
+                    (
+                        "BACKGROUND",
+                        (0,0),
+                        (0,0),
+                        colors.HexColor(
+                            "#FFF0BA"
+                        )
+                    ),
+
+                    (
+                        "BOX",
+                        (0,0),
+                        (-1,-1),
+                        .8,
+                        colors.HexColor(
+                            "#D1B86D"
+                        )
+                    ),
+
+                    (
+                        "INNERGRID",
+                        (0,0),
+                        (-1,-1),
+                        .4,
+                        colors.HexColor(
+                            "#E4D6AA"
+                        )
+                    ),
+
+                    (
+                        "VALIGN",
+                        (0,0),
+                        (-1,-1),
+                        "TOP"
+                    )
+
+                ])
+            )
+
+
+            story.append(
+                notes_table
+            )
+
+            story.append(
+                Spacer(1,12)
+            )
+
 
     # ========================================================
     # PAYMENTS
     # ========================================================
-
-    story.append(
-        Spacer(1,6)
-    )
 
     story.append(
         Paragraph(
@@ -5265,50 +5586,106 @@ def ledger_pdf(customer_id):
         )
     )
 
+
     payment_data = [
 
         [
-            "Date",
-            "Amount",
-            "Mode",
-            "Note"
+            Paragraph(
+                "<b>Date</b>",
+                normal
+            ),
+
+            Paragraph(
+                "<b>Amount</b>",
+                normal
+            ),
+
+            Paragraph(
+                "<b>Mode</b>",
+                normal
+            ),
+
+            Paragraph(
+                "<b>Note</b>",
+                normal
+            )
         ]
 
     ]
 
+
     for p in payment_rows:
 
-        payment_data.append([
+        payment_data.append(
 
-            str(
-                p["date"]
-                or ""
-            ),
+            [
 
-            money(
-                p["amount"]
-            ),
+                Paragraph(
+                    esc(
+                        p["date"]
+                        or ""
+                    ),
+                    normal
+                ),
 
-            str(
-                p["mode"]
-                or ""
-            ),
+                Paragraph(
+                    money(
+                        p["amount"]
+                    ),
+                    normal
+                ),
 
-            str(
-                p["note"]
-                or ""
-            )
+                Paragraph(
+                    esc(
+                        p["mode"]
+                        or ""
+                    ),
+                    normal
+                ),
 
-        ])
+                Paragraph(
+                    esc(
+                        p["note"]
+                        or ""
+                    ),
+                    normal
+                )
+
+            ]
+
+        )
+
 
     if len(payment_data) == 1:
 
-        payment_data.append([
-            "-",
-            "-",
-            "-",
-            "No payments"
-        ])
+        payment_data.append(
+
+            [
+
+                Paragraph(
+                    "-",
+                    normal
+                ),
+
+                Paragraph(
+                    "-",
+                    normal
+                ),
+
+                Paragraph(
+                    "-",
+                    normal
+                ),
+
+                Paragraph(
+                    "No payments",
+                    normal
+                )
+
+            ]
+
+        )
+
 
     payment_table = Table(
         payment_data,
@@ -5321,8 +5698,16 @@ def ledger_pdf(customer_id):
         ]
     )
 
+
     payment_table.setStyle(
         TableStyle([
+
+            (
+                "FONTNAME",
+                (0,0),
+                (-1,-1),
+                PDF_FONT
+            ),
 
             (
                 "BACKGROUND",
@@ -5379,13 +5764,16 @@ def ledger_pdf(customer_id):
         ])
     )
 
+
     story.append(
         payment_table
     )
 
+
     story.append(
         Spacer(1,20)
     )
+
 
     # ========================================================
     # FOOTER
@@ -5394,23 +5782,18 @@ def ledger_pdf(customer_id):
     story.append(
         Paragraph(
             "Developer: KRISHNA",
-            ParagraphStyle(
-                "footer",
-                parent=styles["Normal"],
-                alignment=TA_CENTER,
-                fontSize=9,
-                textColor=colors.HexColor(
-                    "#8A5A00"
-                )
-            )
+            footer_style
         )
     )
+
 
     doc.build(
         story
     )
 
+
     output.seek(0)
+
 
     safe_name = (
         str(
@@ -5425,6 +5808,7 @@ def ledger_pdf(customer_id):
             "_"
         )
     )
+
 
     return send_file(
         output,
@@ -5450,6 +5834,7 @@ def search():
     ).strip()
 
     con = db()
+
 
     if q:
 
@@ -5508,19 +5893,23 @@ def search():
             )
         ).fetchall()
 
+
     else:
 
         customers_rows = []
 
         jobs_rows = []
 
+
     con.close()
+
 
     body = f"""
 
     <h2>
         🔎 Search
     </h2>
+
 
     <div class="panel">
 
@@ -5547,6 +5936,7 @@ def search():
     </div>
 
     """
+
 
     if q:
 
@@ -5583,6 +5973,7 @@ def search():
                 </tr>
 
         """
+
 
         for c in customers_rows:
 
@@ -5627,6 +6018,7 @@ def search():
                 </tr>
 
             """
+
 
         body += """
 
@@ -5680,6 +6072,7 @@ def search():
                 </tr>
 
         """
+
 
         for j in jobs_rows:
 
@@ -5746,6 +6139,7 @@ def search():
 
             """
 
+
         body += """
 
             </table>
@@ -5755,6 +6149,7 @@ def search():
         </div>
 
         """
+
 
         if (
             not customers_rows
@@ -5774,6 +6169,7 @@ def search():
 
             """
 
+
     return page(
         "Search",
         body
@@ -5790,12 +6186,14 @@ def reports():
 
     con = db()
 
+
     jobs_count = con.execute(
         """
         SELECT COUNT(*)
         FROM jobs
         """
     ).fetchone()[0]
+
 
     total_final_weight = con.execute(
         """
@@ -5807,6 +6205,7 @@ def reports():
         """
     ).fetchone()[0]
 
+
     total_stone_weight = con.execute(
         """
         SELECT COALESCE(
@@ -5816,6 +6215,7 @@ def reports():
         FROM jobs
         """
     ).fetchone()[0]
+
 
     total_net_weight = con.execute(
         """
@@ -5827,6 +6227,7 @@ def reports():
         """
     ).fetchone()[0]
 
+
     total_diamond_weight = con.execute(
         """
         SELECT COALESCE(
@@ -5836,6 +6237,7 @@ def reports():
         FROM jobs
         """
     ).fetchone()[0]
+
 
     total_diamond_count = con.execute(
         """
@@ -5847,6 +6249,7 @@ def reports():
         """
     ).fetchone()[0]
 
+
     total_work = con.execute(
         """
         SELECT COALESCE(
@@ -5856,6 +6259,7 @@ def reports():
         FROM jobs
         """
     ).fetchone()[0]
+
 
     total_paid = con.execute(
         """
@@ -5867,7 +6271,9 @@ def reports():
         """
     ).fetchone()[0]
 
+
     con.close()
+
 
     balance = (
         float(total_work)
@@ -5875,11 +6281,13 @@ def reports():
         float(total_paid)
     )
 
+
     body = f"""
 
     <h2>
         📊 Reports
     </h2>
+
 
     <div class="cardbox">
 
@@ -6031,6 +6439,7 @@ def reports():
 
     """
 
+
     return page(
         "Reports",
         body
@@ -6047,9 +6456,11 @@ def backup():
 
     setup()
 
+
     timestamp = datetime.now().strftime(
         "%Y%m%d_%H%M%S"
     )
+
 
     backup_file = (
         BACKUP_DIR
@@ -6057,10 +6468,12 @@ def backup():
         f"rk_jewellers_backup_{timestamp}.db"
     )
 
+
     shutil.copy2(
         DB,
         backup_file
     )
+
 
     return send_file(
         backup_file,
@@ -6092,57 +6505,47 @@ def about():
 
         <p>
             Customer management, jewellery job,
-            automatic weight calculation, diamond details,
-            payment, ledger, reports aur PDF system.
+            automatic weight calculation,
+            diamond details, payment,
+            ledger, reports aur PDF system.
         </p>
 
         <hr>
 
         <p>
-            <b>
-                Shop:
-            </b>
+            <b>Shop:</b>
             R.K JEWELERS
         </p>
 
         <p>
-            <b>
-                Developer:
-            </b>
+            <b>Developer:</b>
             KRISHNA
         </p>
 
         <p>
-            <b>
-                Version:
-            </b>
+            <b>Version:</b>
             R.K JEWELERS PRO 2026
         </p>
 
         <p>
-            <b>
-                Calculation:
-            </b>
+            <b>Calculation:</b>
             वजन + नग वजन = कुल वजन
         </p>
 
         <p>
-            <b>
-                Calculation:
-            </b>
+            <b>Calculation:</b>
             कुल वजन - लॉस = अंतिम वजन
         </p>
 
         <p>
-            <b>
-                Calculation:
-            </b>
+            <b>Calculation:</b>
             अंतिम वजन - पत्थर वजन = नेट वजन
         </p>
 
     </div>
 
     """
+
 
     return page(
         "About",
@@ -6203,6 +6606,7 @@ if __name__ == "__main__":
     print(
         "=" * 55
     )
+
 
     app.run(
         host="0.0.0.0",
