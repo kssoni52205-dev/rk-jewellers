@@ -45,6 +45,22 @@ from reportlab.platypus import (
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
+# ============================================================
+# HINDI / DEVANAGARI FONT
+# ============================================================
+
+BASE_DIR = Path(__file__).resolve().parent
+
+HINDI_FONT_PATH = (
+    BASE_DIR
+    / "fonts"
+    / "NotoSansDevanagari-VariableFont_wdth,wght.ttf"
+)
+
+pdfmetrics.registerFont(
+    TTFont("NotoDevanagari", str(HINDI_FONT_PATH))
+)
+
 
 # ============================================================
 # APP SETTINGS
