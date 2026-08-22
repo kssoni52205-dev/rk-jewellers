@@ -1392,6 +1392,22 @@ def page(
         title=title,
         body=body
     )
+    # ============================================================
+# LOGIN DETAILS
+# ============================================================
+
+ADMIN_USER = os.environ.get("RK_ADMIN_USER")
+
+ADMIN_PASSWORD = os.environ.get("RK_ADMIN_PASSWORD")
+
+if not ADMIN_USER or not ADMIN_PASSWORD:
+    raise RuntimeError(
+        "RK_ADMIN_USER and RK_ADMIN_PASSWORD environment variables required."
+    )
+
+ADMIN_PASSWORD_HASH = generate_password_hash(
+    ADMIN_PASSWORD
+)
 
 
 # ============================================================
