@@ -128,6 +128,8 @@ ADMIN_PASSWORD_HASH = generate_password_hash(
 PDF_FONT = "Helvetica"
 
 FONT_CANDIDATES = [
+   APP_DIR / "fonts" / "NotoSansDevanagari-VariableFont_wdth,wght.ttf",
+    
     APP_DIR / "NotoSansDevanagari-Regular.ttf",
     APP_DIR / "static" / "NotoSansDevanagari-Regular.ttf",
 
